@@ -7,6 +7,10 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Mapping
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 if TYPE_CHECKING:
     import httpx
 
