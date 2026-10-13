@@ -31,3 +31,27 @@ jobs:
 
       - name: Run pytest
         run: uv run pytest
+
+      - name: Send failure notification email
+        if: failure()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.office365.com
+          server_port: 587
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "CI Failed: ${{ github.repository }} (${{ github.ref_name }})"
+          to: "maurya.k@northeastern.edu, ravichandra.g@northeastern.edu, adkar.k@northeastern.edu"
+          from: "GitHub Actions <${{ secrets.MAIL_USERNAME }}>"
+          body: |
+            Hi guys,
+
+            The workflow test has failed for ${{ github.repository }}!
+
+            Details:
+            - Branch: ${{ github.ref_name }}
+            - Commit: ${{ github.sha }}
+            - Triggered by: ${{ github.actor }}
+
+            Check the run logs here:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
