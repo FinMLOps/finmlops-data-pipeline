@@ -1,5 +1,7 @@
 # FinMLOps Data Pipeline
 
+[![pytest](https://github.com/FinMLOps/finmlops-data-pipeline/actions/workflows/pytest.yml/badge.svg?branch=main)](https://github.com/FinMLOps/finmlops-data-pipeline/actions/workflows/pytest.yml)
+
 An end-to-end data pipeline in DAG format covering data acquisition, preprocessing, testing, data versioning, and workflow management.
 
 > [!IMPORTANT]
@@ -44,6 +46,7 @@ uv run pytest tests/test_marketaux.py
 finmlops-data-pipeline/
 ├── .github/
 │   └── workflows/
+│       ├── pytest.yml        # Automated unit test suite
 │       └── claude.yml        # Claude PR review assistant
 ├── dags/
 │   └── .gitkeep              # Airflow DAGs
