@@ -36,12 +36,12 @@ jobs:
         if: failure()
         uses: dawidd6/action-send-mail@v3
         with:
-          server_address: smtp.office365.com
-          server_port: 587
-          username: ${{ secrets.MAIL_USERNAME }}
-          password: ${{ secrets.MAIL_PASSWORD }}
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.GMAIL_USERNAME }}
+          password: ${{ secrets.GMAIL_APP_PASSWORD }}
           subject: "CI Failed: ${{ github.repository }} (${{ github.ref_name }})"
-          to: "maurya.k@northeastern.edu, ravichandra.g@northeastern.edu, adkar.k@northeastern.edu"
+          to: ${{ secrets.RECIPIENTS }}
           from: "GitHub Actions <${{ secrets.MAIL_USERNAME }}>"
           body: |
             Hi guys,
