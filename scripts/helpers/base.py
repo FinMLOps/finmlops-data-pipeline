@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import os
+import urllib.parse
 from abc import ABC, abstractmethod
+from collections.abc import Iterable, Mapping
 from datetime import datetime
-from typing import TYPE_CHECKING, Any, ClassVar, Iterable, Mapping
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from dotenv import load_dotenv
 
@@ -15,28 +17,46 @@ if TYPE_CHECKING:
     import httpx
 
 from .schemas import (
-    UTC,
     Article,
     make_id,
-    parse_dt,
-    to_utc,
 )
 
 
+def redact(text: str, secret: str | None) -> str:
+    """Replace sensitive API keys in text (URLs, error messages) to protect logs.
+
+    Note:
+        Secrets shorter than 8 characters (e.g. short test or demo keys) are ignored
+        to prevent accidental over-redaction of common substrings.
+    """
+    if not secret or len(secret) < 8:
+        return text
+
+    text = text.replace(secret, "[REDACTED]")
+
+    encoded = urllib.parse.quote(secret, safe="")
+    if encoded != secret:
+        text = text.replace(encoded, "[REDACTED]")
+
+    return text
+
+
 class SourceError(RuntimeError):
-    """Raised when an API request fails."""
+    """Raised when an API request fails, stripping secrets from logs."""
 
     def __init__(
         self,
         source: str,
         message: str,
         status: int | None = None,
+        *,
+        secret: str | None = None,
     ) -> None:
         self.source = source
         self.status = status
         prefix = f"{source}: " if source else ""
         suffix = f" (HTTP {status})" if status else ""
-        super().__init__(f"{prefix}{message}{suffix}")
+        super().__init__(f"{prefix}{redact(message, secret)}{suffix}")
 
 
 class NewsSource(ABC):
@@ -64,6 +84,10 @@ class NewsSource(ABC):
     def __repr__(self) -> str:
         return f"<{type(self).__name__} name={self.name!r}>"
 
+    def _error(self, message: str, status: int | None = None) -> SourceError:
+        """Create a SourceError pre-configured with this source's name and API key."""
+        return SourceError(self.name, message, status, secret=self.api_key)
+
     @abstractmethod
     async def fetch(
         self, query: str, since: datetime, until: datetime, client: httpx.AsyncClient
@@ -83,21 +107,17 @@ class NewsSource(ABC):
         try:
             response = await client.get(url, params=params, headers=headers)
         except httpx.HTTPError as exc:
-            raise SourceError(self.name, f"request failed: {exc}") from exc
+            raise self._error(f"request failed: {exc}") from None
 
         if response.status_code >= 400:
-            raise SourceError(
-                self.name,
-                _short(response.text),
-                response.status_code,
-            )
+            safe_text = _short(redact(response.text, self.api_key))
+            raise self._error(safe_text, response.status_code)
 
         try:
             return response.json()
-        except ValueError as exc:
-            raise SourceError(
-                self.name, f"invalid JSON: {_short(response.text)}"
-            ) from exc
+        except ValueError:
+            safe_text = _short(redact(response.text, self.api_key))
+            raise self._error(f"invalid JSON: {safe_text}") from None
 
     def _article(
         self,
