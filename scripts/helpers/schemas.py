@@ -155,19 +155,60 @@ class ArticleScore:
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError(f"confidence must be in [0, 1], got {self.confidence!r}")
 
+    @property
+    def prediction(self) -> str | None:
+        """The top predicted class label (e.g. 'positive', 'neutral', 'negative')."""
+        val = self.labels.get("prediction")
+        return str(val) if val is not None else None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "score": self.score,
             "confidence": self.confidence,
+            "prediction": self.prediction,
             "labels": dict(self.labels),
         }
 
     @classmethod
     def from_dict(cls, data: Mapping[str, Any]) -> ArticleScore:
+        labels = dict(data.get("labels") or {})
+        if "prediction" in data and "prediction" not in labels:
+            labels["prediction"] = data["prediction"]
         return cls(
             score=float(data["score"]),
             confidence=float(data.get("confidence", 1.0)),
-            labels=dict(data.get("labels") or {}),
+            labels=labels,
+        )
+
+    @classmethod
+    def from_finbert(cls, predictions: list[Mapping[str, Any]] | Mapping[str, float]) -> ArticleScore:
+        """Construct an ArticleScore directly from Hugging Face FinBERT output.
+
+        Accepts either:
+          - A list of dicts: [{'label': 'positive', 'score': 0.898}, ...]
+          - A dictionary: {'positive': 0.898, 'neutral': 0.082, 'negative': 0.020}
+        """
+        if isinstance(predictions, list):
+            prob_map = {str(item["label"]).lower(): float(item["score"]) for item in predictions}
+        elif isinstance(predictions, Mapping):
+            prob_map = {str(k).lower(): float(v) for k, v in predictions.items()}
+        else:
+            raise TypeError(f"expected list or mapping of predictions, got {type(predictions).__name__}")
+
+        pos = prob_map.get("positive", 0.0)
+        neg = prob_map.get("negative", 0.0)
+        sentiment_score = pos - neg
+
+        top_label = max(prob_map, key=prob_map.get) if prob_map else "neutral"
+        confidence = prob_map.get(top_label, 1.0)
+
+        return cls(
+            score=sentiment_score,
+            confidence=confidence,
+            labels={
+                "prediction": top_label,
+                "probabilities": prob_map,
+            },
         )
 
 
