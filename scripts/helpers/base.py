@@ -23,20 +23,29 @@ from .schemas import (
 )
 
 
+def redact(text: str, secret: str | None) -> str:
+    """Replace sensitive API keys in text (URLs, error messages) to protect logs."""
+    if not secret or len(secret) < 8:
+        return text
+    return text.replace(secret, "[REDACTED]")
+
+
 class SourceError(RuntimeError):
-    """Raised when an API request fails."""
+    """Raised when an API request fails, stripping secrets from logs."""
 
     def __init__(
         self,
         source: str,
         message: str,
         status: int | None = None,
+        *,
+        secret: str | None = None,
     ) -> None:
         self.source = source
         self.status = status
         prefix = f"{source}: " if source else ""
         suffix = f" (HTTP {status})" if status else ""
-        super().__init__(f"{prefix}{message}{suffix}")
+        super().__init__(f"{prefix}{redact(message, secret)}{suffix}")
 
 
 class NewsSource(ABC):
@@ -83,20 +92,23 @@ class NewsSource(ABC):
         try:
             response = await client.get(url, params=params, headers=headers)
         except httpx.HTTPError as exc:
-            raise SourceError(self.name, f"request failed: {exc}") from exc
+            raise SourceError(
+                self.name, f"request failed: {exc}", secret=self.api_key
+            ) from exc
 
         if response.status_code >= 400:
             raise SourceError(
                 self.name,
                 _short(response.text),
                 response.status_code,
+                secret=self.api_key,
             )
 
         try:
             return response.json()
         except ValueError as exc:
             raise SourceError(
-                self.name, f"invalid JSON: {_short(response.text)}"
+                self.name, f"invalid JSON: {_short(response.text)}", secret=self.api_key
             ) from exc
 
     def _article(
