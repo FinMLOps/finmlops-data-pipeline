@@ -1,6 +1,6 @@
 """Helper utilities, schemas, and base source classes."""
 
-from .base import NewsSource, SourceError, in_window
+from .base import NewsSource, SourceError, in_window, redact
 from .schemas import (
     UTC,
     Article,
@@ -32,4 +32,5 @@ __all__ = [
     "parse_dt",
     "to_utc",
     "utcnow",
+    "redact",
 ]
