@@ -42,7 +42,7 @@ jobs:
           password: ${{ secrets.GMAIL_APP_PASSWORD }}
           subject: "CI Failed: ${{ github.repository }} (${{ github.ref_name }})"
           to: ${{ secrets.RECIPIENTS }}
-          from: "GitHub Actions <${{ secrets.MAIL_USERNAME }}>"
+          from: "GitHub Actions <${{ secrets.GMAIL_USERNAME }}>"
           body: |
             Hi guys,
 
