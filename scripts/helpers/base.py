@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 import os
 import urllib.parse
 from abc import ABC, abstractmethod
@@ -20,6 +22,13 @@ from .schemas import (
     Article,
     make_id,
 )
+
+log = logging.getLogger(__name__)
+
+REQUEST_MAX_RETRIES = 3  # retries after the first failed attempt
+RETRY_BACKOFF_FACTOR = 0.5  # first wait between retries, doubled each time (0.5s, 1s, 2s)
+RETRY_MAX_BACKOFF = 30.0  # longest single wait allowed, in seconds
+RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})  # HTTP status codes that trigger a retry
 
 
 def redact(text: str, secret: str | None) -> str:
@@ -104,10 +113,20 @@ class NewsSource(ABC):
     ) -> Any:
         import httpx
 
-        try:
-            response = await client.get(url, params=params, headers=headers)
-        except httpx.HTTPError as exc:
-            raise self._error(f"request failed: {exc}") from None
+        for attempt in range(REQUEST_MAX_RETRIES + 1):
+            last = attempt == REQUEST_MAX_RETRIES
+            try:
+                response = await client.get(url, params=params, headers=headers)
+            except httpx.HTTPError as exc:
+                if last:
+                    raise self._error(f"request failed: {exc}") from None
+            else:
+                if response.status_code not in RETRY_STATUSES or last:
+                    break
+            log.warning("%s: retry %d/%d", self.name, attempt + 1, REQUEST_MAX_RETRIES)
+            await asyncio.sleep(
+                min(RETRY_BACKOFF_FACTOR * 2**attempt, RETRY_MAX_BACKOFF)
+            )
 
         if response.status_code >= 400:
             safe_text = _short(redact(response.text, self.api_key))
