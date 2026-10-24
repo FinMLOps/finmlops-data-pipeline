@@ -3,6 +3,7 @@ name = "finmlops-data-pipeline"
 version = "0.1.0"
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    "dvc[gs]>=3.67.1",
     "httpx>=0.28.1",
     "python-dotenv>=1.2.4",
 ]

@@ -2,3 +2,6 @@
 __pycache__/
 .env
 !.env.example
+# raw data is tracked by DVC, not git
+data/raw/**/*.jsonl
+
