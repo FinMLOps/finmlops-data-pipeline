@@ -1,0 +1,188 @@
+feature {
+  name: "source"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: BYTES
+  string_domain {
+    name: "source"
+    value: "finnhub"
+    value: "marketaux"
+  }
+  presence {
+    min_fraction: 1.0
+    min_count: 1
+  }
+  drift_comparator {
+    infinity_norm {
+      threshold: 0.3
+    }
+  }
+}
+feature {
+  name: "symbol"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: BYTES
+  string_domain {
+    name: "symbol"
+    value: "AAPL"
+    value: "AMZN"
+    value: "GOOGL"
+    value: "META"
+    value: "MSFT"
+    value: "NVDA"
+    value: "TSLA"
+  }
+  presence {
+    min_fraction: 1.0
+    min_count: 1
+  }
+  drift_comparator {
+    infinity_norm {
+      threshold: 0.3
+    }
+  }
+}
+feature {
+  name: "n_symbols"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: INT
+  int_domain {
+    min: 0
+    max: 45
+  }
+  presence {
+    min_fraction: 1.0
+    min_count: 1
+  }
+}
+feature {
+  name: "title_len"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: INT
+  int_domain {
+    min: 1
+    max: 450
+  }
+  presence {
+    min_fraction: 1.0
+    min_count: 1
+  }
+  drift_comparator {
+    jensen_shannon_divergence {
+      threshold: 0.3
+    }
+  }
+}
+feature {
+  name: "summary_len"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: INT
+  int_domain {
+    min: 1
+    max: 1500
+  }
+  presence {
+    min_count: 1
+  }
+  drift_comparator {
+    jensen_shannon_divergence {
+      threshold: 0.3
+    }
+  }
+}
+feature {
+  name: "has_url"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: INT
+  int_domain {
+    min: 0
+    max: 1
+  }
+  presence {
+    min_fraction: 1.0
+    min_count: 1
+  }
+}
+feature {
+  name: "publisher"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: BYTES
+  presence {
+    min_fraction: 0.0
+    min_count: 1
+  }
+}
+feature {
+  name: "published_hour"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: INT
+  int_domain {
+    min: 0
+    max: 23
+  }
+  presence {
+    min_fraction: 1.0
+    min_count: 1
+  }
+}
+feature {
+  name: "age_days"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: INT
+  int_domain {
+    min: 0
+    max: 7
+  }
+  presence {
+    min_fraction: 1.0
+    min_count: 1
+  }
+}
+feature {
+  name: "language"
+  value_count {
+    min: 1
+    max: 1
+  }
+  type: BYTES
+  string_domain {
+    name: "language"
+    value: "en"
+  }
+  presence {
+    min_fraction: 1.0
+    min_count: 1
+  }
+}
+dataset_constraints {
+  num_examples_drift_comparator {
+    min_fraction_threshold: 0.5
+    max_fraction_threshold: 3.0
+  }
+}
