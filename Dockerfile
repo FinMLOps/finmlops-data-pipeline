@@ -8,14 +8,17 @@
 FROM python:3.11-slim-trixie
 
 ARG AIRFLOW_VERSION=3.3.2
-ENV AIRFLOW_HOME=/opt/airflow
+# containers may run as any uid (AIRFLOW_UID), which has no home or username of its own;
+# Airflow needs both (it reads the name via getpass, which checks $USER first)
+ENV AIRFLOW_HOME=/opt/airflow HOME=/opt/airflow USER=airflow
 
 # git: DVC needs it later; curl: compose healthcheck; g++: builds pyfarmhash (a TFDV dependency with no wheel)
 RUN apt-get update \
     && apt-get install -y --no-install-recommends git curl g++ \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --uid 50000 --gid 0 airflow \
-    && mkdir -p /opt/airflow /opt/venv && chown airflow:root /opt/airflow /opt/venv
+    && mkdir -p /opt/airflow /opt/venv && chown airflow:root /opt/airflow /opt/venv \
+    && chmod g+rwX /opt/airflow  # group 0 can write: any AIRFLOW_UID runs with gid 0
 COPY --from=ghcr.io/astral-sh/uv:0.11.8 /uv /usr/local/bin/uv
 
 # Airflow itself, pinned by the official constraints file so installs are reproducible
