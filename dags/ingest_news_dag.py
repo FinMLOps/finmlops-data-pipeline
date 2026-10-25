@@ -8,7 +8,9 @@ from airflow.sdk import DAG
 from airflow.timetables.interval import CronDataIntervalTimetable
 
 SCHEDULES = {
-    "finnhub": "*/10 * * * *",  # every 10 minutes
+    # TODO: set real schedules; every 10 minutes is too often for Marketaux (~100 calls/day free)
+    "finnhub": "*/10 * * * *",
+    "marketaux": "*/10 * * * *",
 }
 
 for source, cron in SCHEDULES.items():
