@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:  # only annotations need httpx here; fetching imports it for real
     import httpx
 
-from scripts.helpers import Article, NewsSource, in_window, parse_dt
+from scripts.helpers import NewsSource, SourceError, in_window, parse_dt
+
+log = logging.getLogger(__name__)
 
 
 class MarketauxSource(NewsSource):
@@ -18,8 +21,8 @@ class MarketauxSource(NewsSource):
 
     async def fetch(
         self, query: str, since: datetime, until: datetime, client: httpx.AsyncClient
-    ) -> list[Article]:
-        out: list[Article] = []
+    ) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
         for page in range(1, int(self.options.get("max_pages", 3)) + 1):
             params = {
                 "symbols": query.upper(),
@@ -29,23 +32,15 @@ class MarketauxSource(NewsSource):
                 "page": page,
                 "api_token": self.api_key,
             }
-            data = await self._get_json(client, self.URL, params=params)
+            try:
+                data = await self._get_json(client, self.URL, params=params)
+            except SourceError as exc:
+                if page == 1:
+                    raise  # nothing fetched yet: report the failure
+                log.warning("%s; keeping %d items from earlier pages", exc, len(out))
+                break
             items = data.get("data") or []
-            for item in items:
-                published = parse_dt(item["published_at"])
-                if not in_window(published, since, until):
-                    continue
-                symbols = [e.get("symbol", "") for e in item.get("entities") or []]
-                out.append(
-                    self._article(
-                        title=item.get("title") or "",
-                        published=published,
-                        url=item.get("url"),
-                        summary=item.get("description") or item.get("snippet"),
-                        symbols=symbols or [query],
-                        raw=item,
-                    )
-                )
+            out += [i for i in items if in_window(parse_dt(i["published_at"]), since, until)]
             meta = data.get("meta") or {}
             if not items or meta.get("returned", 0) < meta.get("limit", 1):
                 break

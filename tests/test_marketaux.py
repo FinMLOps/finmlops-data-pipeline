@@ -62,10 +62,11 @@ def test_marketaux_fetch_success():
         )
     )
     out = run(MarketauxSource(api_key="mock_key"), query="TSLA")
-    assert len(out) == 1
-    assert out[0].title == "Tesla robotaxi event announced"
-    assert out[0].source == "marketaux"
-    assert "TSLA" in out[0].symbols
+    assert len(out) == 1  # stale news outside the window is dropped
+    assert (
+        out[0]["title"] == "Tesla robotaxi event announced"
+    )  # item kept as the API sent it
+    assert out[0]["entities"] == [{"symbol": "TSLA"}]
 
 
 @respx.mock
@@ -102,7 +103,7 @@ def test_marketaux_pagination():
     )
     out = run(MarketauxSource(api_key="mock_key", max_pages=2), query="TSLA")
     assert len(out) == 4
-    assert [a.title for a in out] == ["News 1", "News 2", "News 3", "News 4"]
+    assert [i["title"] for i in out] == ["News 1", "News 2", "News 3", "News 4"]
 
 
 @respx.mock
@@ -114,3 +115,30 @@ def test_marketaux_http_error_becomes_source_error():
         run(MarketauxSource(api_key="mock_key"))
     assert exc.value.status == 500
     assert "internal server error" in str(exc.value)
+
+
+@respx.mock
+def test_marketaux_keeps_earlier_pages_when_later_page_fails():
+    # page 1 works and is full, so it asks for page 2, which keeps failing
+    respx.get(
+        "https://api.marketaux.com/v1/news/all", params__contains={"page": "1"}
+    ).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "data": [
+                    {"title": "News 1", "published_at": IN, "url": "https://x/1"},
+                    {"title": "News 2", "published_at": IN, "url": "https://x/2"},
+                    {"title": "News 3", "published_at": IN, "url": "https://x/3"},
+                ],
+                "meta": {"returned": 3, "limit": 3},
+            },
+        )
+    )
+    respx.get(
+        "https://api.marketaux.com/v1/news/all", params__contains={"page": "2"}
+    ).mock(return_value=httpx.Response(500, text="internal server error"))
+
+    out = run(MarketauxSource(api_key="mock_key", max_pages=2), query="TSLA")
+
+    assert len(out) == 3  # page 1 items are not thrown away

@@ -7,7 +7,7 @@ import logging
 import os
 import urllib.parse
 from abc import ABC, abstractmethod
-from collections.abc import Iterable, Mapping
+from collections.abc import Mapping
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, ClassVar
 
@@ -18,17 +18,16 @@ load_dotenv()
 if TYPE_CHECKING:
     import httpx
 
-from .schemas import (
-    Article,
-    make_id,
-)
-
 log = logging.getLogger(__name__)
 
 REQUEST_MAX_RETRIES = 3  # retries after the first failed attempt
-RETRY_BACKOFF_FACTOR = 0.5  # first wait between retries, doubled each time (0.5s, 1s, 2s)
+RETRY_BACKOFF_FACTOR = (
+    0.5  # first wait between retries, doubled each time (0.5s, 1s, 2s)
+)
 RETRY_MAX_BACKOFF = 30.0  # longest single wait allowed, in seconds
-RETRY_STATUSES = frozenset({429, 500, 502, 503, 504})  # HTTP status codes that trigger a retry
+RETRY_STATUSES = frozenset(
+    {429, 500, 502, 503, 504}
+)  # HTTP status codes that trigger a retry
 
 
 def redact(text: str, secret: str | None) -> str:
@@ -100,8 +99,8 @@ class NewsSource(ABC):
     @abstractmethod
     async def fetch(
         self, query: str, since: datetime, until: datetime, client: httpx.AsyncClient
-    ) -> list[Article]:
-        """Fetch articles for a ticker symbol in [since, until]."""
+    ) -> list[dict[str, Any]]:
+        """Fetch raw API items for a ticker symbol in [since, until]."""
 
     async def _get_json(
         self,
@@ -137,28 +136,6 @@ class NewsSource(ABC):
         except ValueError:
             safe_text = _short(redact(response.text, self.api_key))
             raise self._error(f"invalid JSON: {safe_text}") from None
-
-    def _article(
-        self,
-        *,
-        title: str,
-        published: datetime,
-        url: str | None = None,
-        summary: str | None = None,
-        symbols: Iterable[str] = (),
-        raw: Mapping[str, Any] | None = None,
-    ) -> Article:
-        key = url or f"{title}|{published.isoformat()}"
-        return Article(
-            id=make_id(self.name, key),
-            source=self.name,
-            title=title.strip(),
-            published=published,
-            url=url,
-            summary=(summary or "").strip() or None,
-            symbols=tuple(s.upper() for s in symbols if s),
-            raw=dict(raw or {}),
-        )
 
 
 def in_window(published: datetime, since: datetime, until: datetime) -> bool:

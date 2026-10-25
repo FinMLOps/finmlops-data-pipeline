@@ -58,11 +58,11 @@ def test_finnhub_fetch_success():
         )
     )
     out = run(FinnhubSource(api_key="mock_key"), query="AAPL")
-    assert len(out) == 1
-    assert out[0].title == "Apple Beats Q3"
-    assert out[0].symbols == ("AAPL",)
-    assert out[0].source == "finnhub"
-    assert out[0].url == "https://news.com/aapl"
+    assert len(out) == 1  # old news outside the window is dropped
+    assert (
+        out[0]["headline"] == "Apple Beats Q3"
+    )  # item kept exactly as the API sent it
+    assert out[0]["related"] == "AAPL"
 
 
 @respx.mock

@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     import httpx
 
 
-from scripts.helpers import Article, NewsSource, in_window, parse_dt
+from scripts.helpers import NewsSource, in_window, parse_dt
 
 
 class FinnhubSource(NewsSource):
@@ -18,7 +18,7 @@ class FinnhubSource(NewsSource):
 
     async def fetch(
         self, query: str, since: datetime, until: datetime, client: httpx.AsyncClient
-    ) -> list[Article]:
+    ) -> list[dict[str, Any]]:
         params = {
             "symbol": query.upper(),
             "from": since.date().isoformat(),
@@ -26,19 +26,5 @@ class FinnhubSource(NewsSource):
             "token": self.api_key,
         }
         items = await self._get_json(client, self.URL, params=params)
-        out: list[Article] = []
-        for item in items or []:
-            published = parse_dt(item["datetime"])
-            if not in_window(published, since, until):
-                continue
-            out.append(
-                self._article(
-                    title=item.get("headline") or "",
-                    published=published,
-                    url=item.get("url"),
-                    summary=item.get("summary"),
-                    symbols=[item.get("related") or query],
-                    raw=item,
-                )
-            )
-        return out
+        # keep items exactly as Finnhub sent them, only trimmed to the requested window
+        return [i for i in items or [] if in_window(parse_dt(i["datetime"]), since, until)]
