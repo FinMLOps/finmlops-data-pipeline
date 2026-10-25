@@ -10,11 +10,19 @@ This is the data pipeline for our FinMLOps project. It pulls financial news for 
 
 ## How it works
 
-```text
-ingest_finnhub (every hour)  ─┐
-                               ├─> data/raw/YYYY/MM/DD/ ─> process_news (daily, 00:30 UTC)
-ingest_marketaux (every 6 h) ─┘                             tfdv_validate -> preprocess
-                                                                    └─> data/processed/news.parquet
+```mermaid
+flowchart LR
+    F([Finnhub API]) -- "ingest_finnhub<br/>every hour" --> R[("data/raw/<br/>YYYY/MM/DD/")]
+    M([Marketaux API]) -- "ingest_marketaux<br/>every 6 hours" --> R
+
+    subgraph process_news ["process_news (daily, 00:30 UTC)"]
+        V{tfdv_validate} -- passes --> P[preprocess]
+    end
+
+    R --> V
+    S[("data/schema/<br/>schema.pbtxt")] -. checked against .-> V
+    V -- anomalies --> A[/email alert/]
+    P --> O[("data/processed/<br/>news.parquet")]
 ```
 
 **Ingest** (`scripts/ingest.py`) fetches news for every ticker from both APIs at the same time and saves the responses as-is, one JSONL file per source, under `data/raw/YYYY/MM/DD/`. Files go in the folder of the day the fetch window starts, and we never overwrite raw files. If an API rate limits us or has a server error, the request is retried a few times, and if one source or ticker fails the rest still get saved.
