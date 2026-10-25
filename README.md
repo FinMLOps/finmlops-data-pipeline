@@ -250,6 +250,15 @@ If they're blank, alerts are just skipped with a warning and everything else sti
 > [!IMPORTANT]
 > The CI failure email uses GitHub secrets, which only GitHub Actions can see. The pipeline can't read those, so you need to put the Gmail settings in your own `.env` too.
 
+## Data versioning (DVC)
+
+We version `data/raw/` and `data/processed/news.parquet` with DVC. The `preprocess` step is a DVC stage in `dvc.yaml`, so `dvc.lock` records exactly which raw data and code produced each `news.parquet`. To record the current data as a new version:
+```bash
+make snapshot
+```
+
+We're using a local DVC remote for now and will move to a Google Cloud Storage bucket. See [docs/dvc_guide.md](docs/dvc_guide.md) for setup, everyday commands, switching to GCS, and troubleshooting.
+
 ## Tests
 
 ```bash
@@ -275,6 +284,8 @@ finmlops-data-pipeline/
 │   ├── processed/            # news.parquet (not in git)
 │   ├── schema/               # TFDV schema (in git)
 │   └── validation/           # TFDV stats and reports by date (not in git)
+├── docs/
+│   └── dvc_guide.md          # DVC setup (local and GCS) and commands
 ├── logs/                     # Airflow task logs (not in git)
 ├── scripts/
 │   ├── config.py             # the tickers we track
@@ -290,15 +301,10 @@ finmlops-data-pipeline/
 ├── tests/                    # one test file per script
 ├── Dockerfile                # Airflow image with our dependencies
 ├── docker-compose.yaml       # local Airflow setup
-├── Makefile                  # make up / make down
+├── Makefile                  # make up / make down / make snapshot
+├── dvc.yaml                  # DVC pipeline stage (preprocess)
+├── dvc.lock                  # exact data versions from the last DVC run
 ├── .env.example              # template for .env
 ├── pyproject.toml
 └── uv.lock
 ```
-
-## What's left
-
-- Data versioning with DVC (pushing to Google Cloud Storage)
-- Committing a schema baseline from the first full day of data
-- Bias detection with data slicing
-- Speeding up the pipeline using Airflow's Gantt chart

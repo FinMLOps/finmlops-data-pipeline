@@ -1,0 +1,12 @@
+# Pipeline stages tracked by DVC. `uv run dvc repro` reruns a stage only when its
+# inputs changed, and records the exact data versions in dvc.lock.
+# Airflow runs the same scripts on a schedule; this makes each output reproducible.
+stages:
+  preprocess:
+    cmd: uv run python -m scripts.preprocess
+    deps:
+      - data/raw
+      - scripts/preprocess.py
+      - scripts/config.py
+    outs:
+      - data/processed/news.parquet
