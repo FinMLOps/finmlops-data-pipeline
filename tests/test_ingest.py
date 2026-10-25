@@ -127,3 +127,30 @@ def test_does_not_retry_client_errors(tmp_path):
         ingest.run(["AAPL"], SINCE, NOW, ["finnhub"], tmp_path)
 
     assert route.call_count == 1  # only called once, no retries
+
+
+# the command line options (used by Airflow) should reach run() correctly, no API calls
+def test_main_passes_cli_options_to_run(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ingest, "run", lambda *args: calls.append(args) or [])
+
+    ingest.main(["AAPL", "--source", "finnhub",
+                 "--since", "2026-10-12T15:00:00+00:00", "--until", "2026-10-12T16:00:00+00:00"])
+
+    tickers, since, until, sources = calls[0]
+    assert tickers == ["AAPL"]
+    assert sources == ["finnhub"]
+    assert since == NOW - timedelta(hours=1) and until == NOW  # parsed to UTC datetimes
+
+
+# with no options it should behave like before: all tickers, both sources, default window
+def test_main_defaults(monkeypatch):
+    calls = []
+    monkeypatch.setattr(ingest, "run", lambda *args: calls.append(args) or [])
+
+    ingest.main([])
+
+    tickers, since, until, sources = calls[0]
+    assert tickers == ingest.TICKERS
+    assert since is None and until is None  # run() fills in the last 24 hours
+    assert list(sources) == ["finnhub", "marketaux"]

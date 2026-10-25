@@ -1,9 +1,9 @@
 """Fetch news for TICKERS and save raw JSONL to data/raw/YYYY/MM/DD/ (never overwritten)."""
 
+import argparse
 import asyncio
 import json
 import logging
-import sys
 from datetime import timedelta
 from pathlib import Path
 
@@ -12,7 +12,7 @@ import httpx
 from scripts.config import TICKERS
 from scripts.fetch_finnhub import FinnhubSource
 from scripts.fetch_marketaux import MarketauxSource
-from scripts.helpers import SourceError, utcnow
+from scripts.helpers import SourceError, parse_dt, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -80,9 +80,24 @@ def run(tickers=TICKERS, since=None, until=None, sources=SOURCES, root=RAW_DIR):
     return write_raw(by_source, run_at, root)
 
 
-if __name__ == "__main__":
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Fetch raw news into data/raw/.")
+    parser.add_argument("tickers", nargs="*", default=TICKERS)
+    parser.add_argument(
+        "--source", action="append", choices=list(SOURCES), help="only this source (repeatable)"
+    )
+    parser.add_argument(
+        "--since", type=parse_dt, help="window start, ISO time (default: 24h before --until)"
+    )
+    parser.add_argument("--until", type=parse_dt, help="window end, ISO time (default: now)")
+    args = parser.parse_args(argv)
+
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
-    for path in run(sys.argv[1:] or TICKERS):
+    for path in run(args.tickers, args.since, args.until, args.source or SOURCES):
         print(path)
+
+
+if __name__ == "__main__":
+    main()
