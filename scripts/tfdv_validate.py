@@ -12,6 +12,7 @@ import argparse
 import json
 import logging
 import math
+from collections import Counter
 from datetime import date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
@@ -44,6 +45,8 @@ INT_FEATURES = (
 CATEGORICAL_DRIFT = 0.3  # max L-infinity distance between day-over-day distributions
 NUMERIC_DRIFT = 0.3  # max Jensen-Shannon divergence for numeric features
 MIN_VOLUME_FRACTION = 0.5  # alert when articles drop by more than 50% vs previous day
+MAX_VOLUME_FRACTION = 3.0  # alert when articles more than triple vs previous day (pagination bug, duplicates)
+MAX_DUPLICATE_RATE = 0.6  # alert when over 60% of a source's items repeat a URL (normal is ~0.25-0.3)
 OUTLIER_FACTOR = 3  # length/count outlier: more than 3x the largest baseline value
 MAX_AGE_DAYS = 7  # stale: published more than a week before the batch day
 
@@ -109,6 +112,7 @@ def to_row(row, day=None):
         "publisher": _publisher(row),
         "published_hour": published.hour if published else None,
         "age_days": (day - published.date()).days if published and day else None,
+        "language": row.get("language") if isinstance(row.get("language"), str) else None,
     }
 
 
@@ -132,6 +136,7 @@ def infer_schema(stats):
     tfdv.set_domain(schema, "symbol", _string_domain("symbol", TICKERS))
     tfdv.set_domain(schema, "published_hour", _int_domain(0, 23))
     tfdv.set_domain(schema, "has_url", _int_domain(0, 1))
+    tfdv.set_domain(schema, "language", _string_domain("language", ["en"]))  # only English expected
     if _has_feature(schema, "age_days"):
         tfdv.set_domain(schema, "age_days", _int_domain(0, MAX_AGE_DAYS))  # future or stale
 
@@ -145,7 +150,8 @@ def infer_schema(stats):
     publisher.ClearField("domain")
     publisher.presence.min_fraction = 0.0
     # drop the top-level domains infer_schema made for features we replaced above
-    kept = [d for d in schema.string_domain if d.name not in ("source", "symbol", "publisher")]
+    replaced = ("source", "symbol", "publisher", "language")
+    kept = [d for d in schema.string_domain if d.name not in replaced]
     del schema.string_domain[:]
     schema.string_domain.extend(kept)
 
@@ -161,6 +167,7 @@ def infer_schema(stats):
 
     volume = schema.dataset_constraints.num_examples_drift_comparator
     volume.min_fraction_threshold = MIN_VOLUME_FRACTION
+    volume.max_fraction_threshold = MAX_VOLUME_FRACTION
     return schema
 
 
@@ -182,6 +189,38 @@ def _int_domain(lo, hi):
     if hi is not None:
         domain.max = hi
     return domain
+
+
+def coverage(rows):
+    """Article counts per source and ticker, and each source's duplicate-URL rate."""
+    sources = Counter(r["source"] for r in rows)
+    tickers = Counter(t for r in rows for t in preprocess.to_tickers(r["symbols"]))
+    dupes = {}
+    for src in sources:
+        urls = Counter(r["url"] for r in rows if r["source"] == src)
+        dupes[src] = round(sum(c - 1 for c in urls.values()) / sources[src], 3)
+    return {"source": dict(sources), "ticker": dict(tickers), "duplicate_rate": dupes}
+
+
+def coverage_anomalies(counts, previous=None):
+    """Problems TFDV's schema can't express: a source or ticker going missing, a source
+    dropping by half on its own (Finnhub is ~90% of articles, so total volume hides it),
+    or a source returning mostly duplicates."""
+    problems = []
+    for src in SOURCES:
+        n = counts["source"].get(src, 0)
+        before = (previous or {}).get("source", {}).get(src)
+        if n == 0:
+            problems.append(f"no articles from {src}")
+        elif before and n < before * MIN_VOLUME_FRACTION:
+            problems.append(f"{src}: {n} articles vs {before} on the previous day")
+    for ticker in TICKERS:
+        if counts["ticker"].get(ticker, 0) == 0:
+            problems.append(f"no articles for {ticker}")
+    for src, rate in counts["duplicate_rate"].items():
+        if rate > MAX_DUPLICATE_RATE:
+            problems.append(f"{src}: {rate:.0%} of items repeat a URL")
+    return problems
 
 
 def summarize(anomalies):
@@ -231,16 +270,26 @@ def _day_dir(root, day):
     return root / day.strftime("%Y/%m/%d")
 
 
-def previous_stats(day, root=VALIDATION_DIR):
-    """Stats from the latest validated day before `day`, if any."""
+def _latest_before(day, root, name):
+    """Path of `name` in the latest validated day folder before `day`, or None."""
     earlier = []
-    for path in root.glob("*/*/*/stats.pbtxt"):
+    for path in root.glob(f"*/*/*/{name}"):
         y, m, d = path.parent.relative_to(root).parts
         if (past := date(int(y), int(m), int(d))) < day:
             earlier.append((past, path))
-    if not earlier:
-        return None
-    return tfdv.load_stats_text(str(max(earlier)[1]))
+    return max(earlier)[1] if earlier else None
+
+
+def previous_stats(day, root=VALIDATION_DIR):
+    """Stats from the latest validated day before `day`, if any."""
+    path = _latest_before(day, root, "stats.pbtxt")
+    return tfdv.load_stats_text(str(path)) if path else None
+
+
+def previous_counts(day, root=VALIDATION_DIR):
+    """Coverage counts saved in the latest earlier report.json, if any."""
+    path = _latest_before(day, root, "report.json")
+    return json.loads(path.read_text()).get("counts") if path else None
 
 
 def run(
@@ -285,6 +334,9 @@ def run(
     previous = previous_stats(day, out_root)
     stats, anomalies = validate(df, schema, previous)
     report["anomalies"] = summarize(anomalies)
+    report["counts"] = coverage(records)
+    if problems := coverage_anomalies(report["counts"], previous_counts(day, out_root)):
+        report["anomalies"]["__coverage__"] = problems
 
     out_dir = _day_dir(out_root, day)
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -8,11 +8,14 @@ from datetime import date, datetime, timezone
 import pytest
 import tensorflow_data_validation as tfdv
 
+from scripts.config import TICKERS
 from scripts.helpers import parse_dt
 from scripts.preprocess import finnhub_row, marketaux_row
 from scripts.tfdv_validate import (
     DataValidationError,
     alert_text,
+    coverage,
+    coverage_anomalies,
     infer_schema,
     load_day,
     run,
@@ -22,7 +25,6 @@ from scripts.tfdv_validate import (
 )
 
 DAY = date(2026, 10, 20)
-TICKERS = ["AAPL", "MSFT", "NVDA", "TSLA"]
 MIDNIGHT = int(datetime(2026, 10, 20, tzinfo=timezone.utc).timestamp())
 
 
@@ -101,7 +103,7 @@ def schema():
 def test_to_row_good_record():
     r = to_row(row(3), DAY)
     assert r["source"] == "finnhub"
-    assert r["symbol"] == "TSLA"
+    assert r["symbol"] == TICKERS[3]
     assert r["n_symbols"] == 1
     assert r["title_len"] == len("Headline number 3 about earnings")
     assert r["has_url"] == 1
@@ -282,3 +284,42 @@ def test_alert_text_lists_anomalies():
     assert "2026-10-21" in text
     assert "- title_len: Column dropped" in text
     assert "corrupt lines: 1" in text
+
+
+def test_coverage_counts_sources_tickers_and_duplicates():
+    counts = coverage(good_batch(14))
+    assert counts["source"] == {"marketaux": 7, "finnhub": 7}
+    assert set(counts["ticker"]) == set(TICKERS)
+    assert counts["duplicate_rate"] == {"marketaux": 0.0, "finnhub": 0.0}
+
+
+def test_coverage_flags_missing_source_and_ticker():
+    rows = [r for r in good_batch(28) if r["source"] == "finnhub" and r["symbols"] != ["AMZN"]]
+    problems = coverage_anomalies(coverage(rows))
+    assert "no articles from marketaux" in problems
+    assert "no articles for AMZN" in problems
+
+
+def test_coverage_flags_one_source_halving():
+    # total barely moves (finnhub dominates), but marketaux drops from 20 to 5
+    previous = {"source": {"finnhub": 200, "marketaux": 20}}
+    counts = {"source": {"finnhub": 210, "marketaux": 5}, "ticker": dict.fromkeys(TICKERS, 1), "duplicate_rate": {}}
+    assert coverage_anomalies(counts, previous) == ["marketaux: 5 articles vs 20 on the previous day"]
+
+
+def test_coverage_flags_duplicate_spike():
+    rows = [row(i, url="https://same.example/x") for i in range(14)]
+    problems = coverage_anomalies(coverage(rows))
+    assert any("repeat a URL" in p for p in problems)
+
+
+def test_non_english_article_flagged(schema):
+    batch = good_batch(30) + [row(500, language="de")]
+    _, anomalies = validate(frame(batch), schema)
+    assert "language" in anomalies.anomaly_info
+
+
+def test_volume_spike_flagged(schema):
+    previous, _ = validate(frame(good_batch(10)), schema)
+    _, anomalies = validate(frame(good_batch(40)), schema, previous)
+    assert anomalies.dataset_anomaly_info.reason  # 4x more articles than the previous day
