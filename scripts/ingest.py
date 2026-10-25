@@ -39,9 +39,13 @@ async def fetch_all(sources, tickers, since, until):
         return await asyncio.gather(*(one(s, t) for s in sources for t in tickers))
 
 
-def write_raw(by_source, run_at, root=RAW_DIR):
-    """Write one JSONL file per source, each line an API item exactly as received."""
-    day_dir = root / run_at.strftime("%Y/%m/%d")
+def write_raw(by_source, run_at, root=RAW_DIR, day=None):
+    """Write one JSONL file per source, each line an API item exactly as received.
+
+    Files go in the folder for `day` (the start of the fetch window), so an
+    11 PM-midnight run that finishes after midnight still lands in its own day.
+    """
+    day_dir = root / (day or run_at).strftime("%Y/%m/%d")
     day_dir.mkdir(parents=True, exist_ok=True)
     paths = []
     for name, items in by_source.items():
@@ -59,6 +63,7 @@ def write_raw(by_source, run_at, root=RAW_DIR):
 def run(tickers=TICKERS, since=None, until=None, sources=SOURCES, root=RAW_DIR):
     """Airflow-callable entry point; returns the written file paths."""
     run_at = utcnow()
+    day = since or run_at  # explicit window -> its start date; otherwise today
     until = until or run_at
     since = since or until - timedelta(days=1)
     clients = []
@@ -77,7 +82,7 @@ def run(tickers=TICKERS, since=None, until=None, sources=SOURCES, root=RAW_DIR):
     by_source = {c.name: [] for c in clients}
     for source, items in results:
         by_source[source.name] += items or []
-    return write_raw(by_source, run_at, root)
+    return write_raw(by_source, run_at, root, day=day)
 
 
 def main(argv=None):

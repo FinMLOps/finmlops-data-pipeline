@@ -154,3 +154,17 @@ def test_main_defaults(monkeypatch):
     assert tickers == ingest.TICKERS
     assert since is None and until is None  # run() fills in the last 24 hours
     assert list(sources) == ["finnhub", "marketaux"]
+
+
+# the 11pm-midnight run finishes after midnight, but its file should go in the 11pm day's folder
+@respx.mock
+def test_run_saves_under_window_start_date(tmp_path, monkeypatch):
+    since = datetime(2026, 10, 12, 23, 0, tzinfo=timezone.utc)
+    until = datetime(2026, 10, 13, 0, 0, tzinfo=timezone.utc)
+    monkeypatch.setattr(ingest, "utcnow", lambda: until + timedelta(seconds=5))  # run happens after midnight
+    item = {**FINNHUB_OK[0], "datetime": int((since + timedelta(minutes=30)).timestamp())}
+    respx.get(FinnhubSource.URL).mock(return_value=httpx.Response(200, json=[item]))
+
+    (path,) = ingest.run(["AAPL"], since, until, ["finnhub"], tmp_path)
+
+    assert "/2026/10/12/" in path  # not 2026/10/13
