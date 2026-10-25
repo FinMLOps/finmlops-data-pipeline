@@ -21,7 +21,7 @@ import tensorflow_data_validation as tfdv
 from tensorflow_metadata.proto.v0 import schema_pb2
 
 from scripts import preprocess
-from scripts.email_alerts import send_alert
+from scripts.alert_utils import send_alert
 from scripts.config import TICKERS
 from scripts.helpers import utcnow
 from scripts.ingest import RAW_DIR, SOURCES
