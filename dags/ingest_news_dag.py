@@ -8,9 +8,8 @@ from airflow.sdk import DAG
 from airflow.timetables.interval import CronDataIntervalTimetable
 
 SCHEDULES = {
-    # TODO: set real schedules; every 10 minutes is too often for Marketaux (~100 calls/day free)
-    "finnhub": "*/10 * * * *",
-    "marketaux": "*/10 * * * *",
+    "finnhub": "@hourly",  # runs every hr
+    "marketaux": "0 */6 * * *",  # runs every 6 hrs
 }
 
 for source, cron in SCHEDULES.items():
@@ -27,7 +26,8 @@ for source, cron in SCHEDULES.items():
         BashOperator(
             task_id="ingest",
             bash_command=(
-                'cd "$PROJECT_DIR" && "$PIPELINE_PYTHON" -m scripts.ingest --source ' + source
+                'cd "$PROJECT_DIR" && "$PIPELINE_PYTHON" -m scripts.ingest --source '
+                + source
                 + " --since {{ data_interval_start.isoformat() }}"
                 + " --until {{ data_interval_end.isoformat() }}"
             ),

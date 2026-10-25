@@ -80,7 +80,20 @@ A few notes on the setup:
 - We don't use the official Airflow image. It's based on an older Debian, and TFDV 1.21 won't install on it, so our `Dockerfile` installs Airflow on top of `python:3.11-slim-trixie` instead.
 - The pipeline scripts run in their own Python environment inside the image (`/opt/venv`, built from `uv.lock`), separate from Airflow's. That way TFDV and TensorFlow can't mess with Airflow's packages.
 - Postgres is only there for Airflow's own bookkeeping (DAG runs, task status, history). Our data doesn't go in it.
-- `dags/smoke_test.py` is a test DAG you can trigger from the UI to make sure Airflow can run our scripts. The real DAGs are still in progress.
+- `dags/ingest_news_dag.py` has the ingestion DAGs. `ingest_finnhub` runs every hour and `ingest_marketaux` every 6 hours, and each run fetches only its own time window, so runs never overlap. Turn the DAGs on in the UI to start collecting.
+
+### Why hourly for Finnhub and every 6 hours for Marketaux
+
+We track 7 tickers, and each run makes one request per ticker (Marketaux can take up to 3 pages per ticker), so the schedules come down to each API's free-plan limits:
+
+| | Requests per run | Runs per day | Requests per day | Free plan limit |
+|---|---|---|---|---|
+| Finnhub, hourly | 7 tickers x 1 = 7 | 24 | 7 x 24 = 168 | ~60 per minute, no daily cap |
+| Marketaux, every 6 hours | 7 tickers x up to 3 pages = 21 | 4 | 21 x 4 = 84 at most | ~100 per day |
+
+Finnhub's only limit is per minute, and 7 requests at once is well under 60, so we could run it more often. We don't, because its company news endpoint only filters by date, so every call returns the whole day's articles anyway. Running more than once an hour would mostly re-download the same articles.
+
+Marketaux is the one that's limited. Every 6 hours uses at most 84 of the ~100 daily requests and leaves some room for retries. Running every 4 hours would be 21 x 6 = 126 requests, which is over the limit. In practice we use fewer than 84 because tickers with less news stop after the first page.
 
 ## Data validation
 
@@ -136,7 +149,7 @@ finmlops-data-pipeline/
 │   ├── pytest.yml            # runs the tests in CI
 │   └── claude.yml            # Claude PR review assistant
 ├── dags/
-│   └── smoke_test.py         # checks Airflow can run our scripts
+│   └── ingest_news_dag.py    # ingestion DAGs (Finnhub hourly, Marketaux every 6 hours)
 ├── data/
 │   ├── raw/                  # raw API responses by date (not in git)
 │   ├── processed/            # news.parquet (not in git)
