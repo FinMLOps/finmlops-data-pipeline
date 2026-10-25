@@ -19,6 +19,7 @@ OUT_PATH = ROOT / "data" / "processed" / "news.parquet"
 COLUMNS = [
     "id",
     "source",
+    "publisher",
     "title",
     "summary",
     "published",
@@ -29,13 +30,14 @@ COLUMNS = [
 ALIASES = {"GOOG": "GOOGL"}  # Alphabet's two share classes count as one company
 
 
-def make_row(source, title, summary, published, url, symbols, language="en"):
+def make_row(source, publisher, title, summary, published, url, symbols, language="en"):
     """Build one common row; the id is stable across runs (source + url)."""
     published = parse_dt(published)  # unix seconds or ISO string -> UTC datetime
     key = url or f"{title}|{published.isoformat()}"
     values = [
         make_id(source, key),
         source,
+        publisher,
         title,
         summary,
         published,
@@ -49,6 +51,7 @@ def make_row(source, title, summary, published, url, symbols, language="en"):
 def finnhub_row(item):
     return make_row(
         "finnhub",
+        publisher=item.get("source"),  # e.g. "Yahoo"
         title=item.get("headline"),
         summary=item.get("summary"),
         published=item["datetime"],
@@ -60,6 +63,7 @@ def finnhub_row(item):
 def marketaux_row(item):
     return make_row(
         "marketaux",
+        publisher=item.get("source"),  # e.g. "cnbc.com"
         title=item.get("title"),
         summary=item.get("description") or item.get("snippet"),
         published=item["published_at"],
@@ -129,7 +133,7 @@ def preprocess(rows):
     df["text"] = df["title"].where(
         df["summary"] == "", df["title"] + "\n\n" + df["summary"]
     )
-    cols = ["id", "source", "ticker", "title", "summary", "text", "published", "url"]
+    cols = ["id", "source", "publisher", "ticker", "title", "summary", "text", "published", "url"]
     return df[cols].reset_index(drop=True)
 
 
