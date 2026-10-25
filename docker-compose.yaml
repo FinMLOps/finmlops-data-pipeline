@@ -21,6 +21,7 @@ x-airflow-common:
     AIRFLOW__API_AUTH__JWT_SECRET: ${AIRFLOW__API_AUTH__JWT_SECRET:-local-dev-secret}
     PROJECT_DIR: /opt/airflow/project      # the repo, mounted below
     PIPELINE_PYTHON: /opt/venv/bin/python  # python with the pipeline's dependencies
+    PYTHONPATH: /opt/airflow/project       # lets DAG files import scripts.alert_utils
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs

@@ -32,7 +32,9 @@ def send_email(subject, body):
         return False
 
     msg = EmailMessage()
-    msg["Subject"], msg["From"], msg["To"] = subject, user, ", ".join(recipients)
+    msg["Subject"] = subject
+    msg["From"] = user
+    msg["To"] = ", ".join(recipients)
     msg.set_content(body)
     with smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=30) as smtp:
         smtp.login(user, password)
@@ -52,3 +54,15 @@ def send_alert(subject, body):
     else:
         log.warning("email alerts not configured (see .env): %s", subject)
     return sent
+
+
+def airflow_failure_callback(context):
+    """Airflow on_failure_callback: email which task failed, after its retries ran out."""
+    ti = context["ti"]
+    send_alert(
+        f"[FinMLOps] {ti.dag_id}.{ti.task_id} failed",
+        f"Run: {context['run_id']}\n"
+        f"Attempt: {ti.try_number}\n"
+        f"Error: {context.get('exception')}\n"
+        "Check the task log in the Airflow UI (http://localhost:8080).",
+    )

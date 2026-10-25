@@ -58,3 +58,19 @@ def test_email_alert(monkeypatch):
 def test_failing_email_does_not_raise(monkeypatch):
     configure_email(monkeypatch, password="wrong")
     assert alerts.send_alert("s", "b") is False  # logged, not raised
+
+
+class FakeTI:
+    dag_id, task_id, try_number = "process_news", "tfdv_validate", 1
+
+
+def test_airflow_failure_callback_emails_task_details(monkeypatch):
+    configure_email(monkeypatch)
+    context = {"ti": FakeTI(), "run_id": "scheduled__2026-10-25", "exception": RuntimeError("boom")}
+
+    alerts.airflow_failure_callback(context)
+
+    (msg,) = FakeSMTP.sent
+    assert msg["Subject"] == "[FinMLOps] process_news.tfdv_validate failed"
+    assert "scheduled__2026-10-25" in msg.get_content()
+    assert "boom" in msg.get_content()

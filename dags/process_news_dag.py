@@ -7,6 +7,8 @@ from airflow.providers.standard.operators.bash import BashOperator
 from airflow.sdk import DAG
 from airflow.timetables.interval import CronDataIntervalTimetable
 
+from scripts.alert_utils import airflow_failure_callback
+
 RUN = 'cd "$PROJECT_DIR" && "$PIPELINE_PYTHON" -m '
 
 with DAG(
@@ -16,13 +18,18 @@ with DAG(
     start_date=pendulum.datetime(2026, 10, 1, tz="UTC"),
     catchup=False,
     max_active_runs=1,
-    default_args={"retries": 1, "retry_delay": timedelta(minutes=5)},
+    default_args={
+        "retries": 1,
+        "retry_delay": timedelta(minutes=5),
+        "on_failure_callback": airflow_failure_callback,  # email once retries run out
+    },
     tags=["process"],
 ):
     validate = BashOperator(
         task_id="tfdv_validate",
         # the day that just ended (the run at 2026-10-26 00:30 validates 2026-10-25)
-        bash_command=RUN + "scripts.tfdv_validate {{ data_interval_start.strftime('%Y-%m-%d') }}",
+        bash_command=RUN
+        + "scripts.tfdv_validate {{ data_interval_start.strftime('%Y-%m-%d') }}",
         retries=0,  # anomalies won't go away on a retry
     )
     preprocess = BashOperator(
