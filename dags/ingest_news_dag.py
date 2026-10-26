@@ -1,4 +1,4 @@
-"""Ingestion DAGs: one per news source, each fetching exactly its own time window."""
+"""Ingestion DAGs: one per news source, each fetching its own time window, a few hours late."""
 
 from datetime import timedelta
 
@@ -13,6 +13,12 @@ SCHEDULES = {
     "finnhub": "@hourly",  # runs every hr
     "marketaux": "0 */6 * * *",  # runs every 6 hrs
 }
+# The APIs make articles available hours after they're published, so each run fetches
+# the window that ended LAG_HOURS ago (the 12:00 Finnhub run fetches 05:00-06:00).
+# Fetching the window that just ended got ~8% of the articles (26 vs 338 on 26 Oct).
+LAG_HOURS = 6
+SINCE = "{{ (data_interval_start - macros.timedelta(hours=" + str(LAG_HOURS) + ")).isoformat() }}"
+UNTIL = "{{ (data_interval_end - macros.timedelta(hours=" + str(LAG_HOURS) + ")).isoformat() }}"
 
 for source, cron in SCHEDULES.items():
     with DAG(
@@ -34,7 +40,7 @@ for source, cron in SCHEDULES.items():
             bash_command=(
                 'cd "$PROJECT_DIR" && "$PIPELINE_PYTHON" -m scripts.ingest --source '
                 + source
-                + " --since {{ data_interval_start.isoformat() }}"
-                + " --until {{ data_interval_end.isoformat() }}"
+                + " --since " + SINCE
+                + " --until " + UNTIL
             ),
         )

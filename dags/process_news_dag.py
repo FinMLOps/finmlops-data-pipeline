@@ -13,8 +13,9 @@ RUN = 'cd "$PROJECT_DIR" && "$PIPELINE_PYTHON" -m '
 
 with DAG(
     dag_id="process_news",
-    # 00:30 UTC: the day is over and the midnight ingest runs have had time to finish
-    schedule=CronDataIntervalTimetable("30 0 * * *", timezone="UTC"),
+    # 06:30 UTC: ingest runs LAG_HOURS (6) late, so the day's last windows are only
+    # fetched at 06:00 the next day; the extra 30 min covers their retries
+    schedule=CronDataIntervalTimetable("30 6 * * *", timezone="UTC"),
     start_date=pendulum.datetime(2026, 10, 26, tz="UTC"),
     catchup=True,
     max_active_runs=1,
@@ -27,7 +28,7 @@ with DAG(
 ):
     validate = BashOperator(
         task_id="tfdv_validate",
-        # the day that just ended (the run at 2026-10-26 00:30 validates 2026-10-25)
+        # the day that just ended (the run at 2026-10-27 06:30 validates 2026-10-26)
         bash_command=RUN
         + "scripts.tfdv_validate {{ data_interval_start.strftime('%Y-%m-%d') }}",
         retries=0,  # anomalies won't go away on a retry
