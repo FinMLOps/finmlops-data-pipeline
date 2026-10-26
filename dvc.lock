@@ -5,9 +5,9 @@ stages:
     deps:
     - path: data/raw
       hash: md5
-      md5: 6824d16dfccecc6a1130d7cf91bdb7ec.dir
-      size: 308107
-      nfiles: 5
+      md5: 05115ba1ce304adfccb61a35fda362a1.dir
+      size: 8254946
+      nfiles: 33
     - path: scripts/config.py
       hash: md5
       md5: 912e4906e7e4bc08e18e940ead54feba
@@ -19,5 +19,5 @@ stages:
     outs:
     - path: data/processed/news.parquet
       hash: md5
-      md5: 798359ba38c24120e16ab4be30f4b4ed
-      size: 100233
+      md5: 9c8ae6e507c1ecf3664c88142c5f2b52
+      size: 3571704
