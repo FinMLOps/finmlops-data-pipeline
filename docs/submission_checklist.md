@@ -81,7 +81,7 @@ We have three DAGs:
 | How to set it up and use it | `docs/dvc_guide.md` |
 
 > [!NOTE]
-> For now our DVC remote is a local folder. Google Cloud is turned off for our school accounts, so we still need to move to a GCS bucket. The steps for that are in `docs/dvc_guide.md`.
+> Our DVC remote is a Google Cloud Storage bucket (`gs://finmlops-pipeline-dvc/dvc`) in our teammate Kshitij's personal Google Cloud account, so everyone on the team can push and pull the same data. We went with a personal account because the Google Cloud access from our university accounts came with a lot of settings and restrictions. Before we had the bucket we used a local folder as the remote.
 
 ### 2.6 Tracking and logging
 

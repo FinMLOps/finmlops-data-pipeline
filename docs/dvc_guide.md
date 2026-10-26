@@ -45,52 +45,62 @@ uv run dvc checkout         # data/raw/ and news.parquet now match that commit
 git checkout main && uv run dvc checkout   # back to the latest
 ```
 
-**Get the data on a new machine** (once a shared remote like GCS is set up):
+**Get the data on a new machine:**
 ```bash
 git clone https://github.com/FinMLOps/finmlops-data-pipeline.git
 cd finmlops-data-pipeline
 uv sync
+gcloud auth application-default login   # the account that has access to the bucket
 uv run dvc pull
 ```
 
-## Setup option 1: local remote (what we use for now)
+## Setup: our GCS bucket (what we use)
 
-A DVC remote doesn't have to be in the cloud, it can just be a folder on your machine. This is enough to version and restore data, but nobody else can pull from it.
+Our DVC remote is a Google Cloud Storage bucket in our teammate Kshitij's personal Google Cloud account. We tried the Google Cloud access that came with our university accounts first, but it has a lot of settings and restrictions (for example, we couldn't create projects), so a personal account was much simpler.
 
-DVC itself is already set up in the repo, so on a fresh clone you only need to pick a remote:
+| | |
+|---|---|
+| Bucket | `finmlops-pipeline-dvc` (project `finmlops-pipeline`, region `us-east1`) |
+| DVC remote | `gcs` → `gs://finmlops-pipeline-dvc/dvc`, already the default in `.dvc/config` |
+| Access | Storage Object Admin on this bucket only, given to each of us by email |
+
+The remote is already set up in the repo, so you only need access and a login:
+
+1. Ask Kshitij to add your email to the bucket (bucket → **Permissions** → **Grant access** → **Storage Object Admin**).
+2. Log in so DVC can use it. DVC uses Google's "application default credentials", which is a separate login from `gcloud auth login`:
+   ```bash
+   gcloud auth application-default login            # pick the email that was given access
+   gcloud storage ls gs://finmlops-pipeline-dvc     # no error = you have access
+   ```
+3. Run `uv run dvc pull` to get the data, or `uv run dvc push` after a snapshot.
+
+## Optional: a local backup remote
+
+Before we had the bucket we used a folder on our own machine as the remote. You can still keep one as an extra backup:
 ```bash
-uv sync
-uv run dvc remote add --local -d local ~/dvc-storage
-uv run dvc push
+uv run dvc remote add --local local ~/dvc-storage
+uv run dvc push -r local
 ```
 
 > [!IMPORTANT]
-> Use `--local` here. It saves the remote in `.dvc/config.local`, which isn't committed, because the folder path only exists on your machine. Without `--local` it would go into `.dvc/config` and point everyone else at a folder they don't have.
+> Use `--local` so it goes into `.dvc/config.local`, which isn't committed (the folder only exists on your machine), and **don't** add `-d`. A default set in `.dvc/config.local` overrides the shared one, so you'd quietly stop pushing to the bucket. If that happens, run `uv run dvc remote default --local --unset`.
 
-> [!CAUTION]
-> A local remote is only a backup on the same machine. If your laptop dies, the data is gone. Switch to GCS (below) as soon as you can.
+## Not on our team? Use your own bucket
 
-## Setup option 2: Google Cloud Storage (shared, for the team)
-
-Once there's a bucket, everyone on the team can `dvc push` and `dvc pull` the same data.
+Our bucket is private, so to run the pipeline somewhere else, make your own bucket and point DVC at it.
 
 > [!WARNING]
-> Google Cloud is turned off for `@northeastern.edu` accounts, so you'll get "Google Cloud Platform service has been disabled" with your school account. Use a personal Gmail account for everything below.
+> University Google accounts can come with restrictions (ours gave "Google Cloud Platform service has been disabled" when we tried to create a project). A personal Google account is the easiest way.
 
-### 1. Get a bucket
+### 1. Make a bucket
 
-Either the person who owns the team's GCP project (for example `finmlops-team6`) adds you to it, or you create your own project with the course credits redeemed on your personal Gmail.
-
-**If someone else owns the project**, ask them to give your personal Gmail access to the bucket: open the bucket, go to **Permissions**, then **Grant access**, add your email, and pick the role **Storage Object Admin**.
-
-**If you're creating it yourself:**
-1. Redeem the credits on your personal Gmail and check they show up under **Billing**.
+1. Set up billing on your Google account (free trial or credits) and check it shows up under **Billing**.
 2. Create a project (**IAM & Admin** then **Create a project**) linked to that billing account, and note the project ID.
 3. Create the bucket (names are global, so it has to be unique):
    ```bash
-   gcloud auth login                          # pick your personal Gmail
+   gcloud auth login
    gcloud config set project <project-id>
-   gcloud storage buckets create gs://finmlops-dvc-<yourname> \
+   gcloud storage buckets create gs://<your-bucket> \
        --location=us-east1 --uniform-bucket-level-access
    ```
 
@@ -99,33 +109,27 @@ Either the person who owns the team's GCP project (for example `finmlops-team6`)
 
 ### 2. Log in so DVC can use it
 
-DVC uses Google's "application default credentials", which is a separate login from `gcloud auth login`:
 ```bash
-gcloud auth application-default login                       # same personal Gmail
+gcloud auth application-default login
 gcloud auth application-default set-quota-project <project-id>
-gcloud storage ls gs://<bucket>                              # no error = you have access
+gcloud storage ls gs://<your-bucket>                 # no error = you have access
 ```
 
-### 3. Point DVC at the bucket
+### 3. Point DVC at your bucket
 
-This one does go in the shared `.dvc/config`, so everyone uses the same remote:
 ```bash
-uv run dvc remote add -d gcs gs://<bucket>/dvc
-uv run dvc remote remove --local local          # stop using the local folder as the default
-uv run dvc push                                 # upload everything versioned so far
-git add .dvc/config
-git commit -m "Use GCS as the DVC remote"
+uv run dvc remote modify gcs url gs://<your-bucket>/dvc
+uv run dvc push                                      # upload everything you've versioned
 ```
-
-After that, teammates only need step 2 (their own login, with access to the bucket) and `uv run dvc pull`.
 
 ## Troubleshooting
 
 | Problem | Fix |
 |---|---|
-| `403` or "does not have storage.objects.list access" | the bucket permission is missing, or you're logged in with a different email than the one that was granted. Check with `gcloud auth list` and `gcloud auth application-default print-access-token` |
-| "Google Cloud Platform service has been disabled" | you're using a `@northeastern.edu` account; switch to a personal Gmail |
+| `403` or "does not have storage.objects.list access" | the bucket permission is missing, or you're logged in with a different email than the one that was given access. Check with `gcloud auth list` and run `gcloud auth application-default login` again with the right one |
+| "Google Cloud Platform service has been disabled" | your account (usually a university one) isn't allowed to use Google Cloud this way. Ask for access to our bucket instead, or use a personal Google account |
 | `dvc push` hangs at "Querying remote cache" | DVC can't find credentials. Run `gcloud auth application-default login` |
-| "without a quota project" warning | `gcloud auth application-default set-quota-project <project-id>` |
+| "without a quota project" warning | harmless, reads and writes are billed to the bucket's project. To hide it: `gcloud auth application-default set-quota-project finmlops-pipeline` (needs access to the project, not just the bucket, so it may fail; that's fine) |
+| `dvc push` goes to `~/dvc-storage` and not the bucket | `.dvc/config.local` has its own default. Run `uv run dvc remote default --local --unset` |
 | `make snapshot` says "nothing to commit" | the data hasn't changed since the last snapshot, so there's nothing new to record |
 | `dvc checkout` says files are missing from the cache | the data was never pushed from the machine that made that snapshot; run `dvc push` there |

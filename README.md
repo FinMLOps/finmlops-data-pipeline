@@ -257,7 +257,7 @@ We version `data/raw/` and `data/processed/news.parquet` with DVC. The `preproce
 make snapshot
 ```
 
-We're using a local DVC remote for now and will move to a Google Cloud Storage bucket. See [docs/dvc_guide.md](docs/dvc_guide.md) for setup, everyday commands, switching to GCS, and troubleshooting.
+The data is stored in a Google Cloud Storage bucket (`gs://finmlops-pipeline-dvc`) in our teammate Kshitij's personal Google Cloud account, since the Google Cloud access from our university accounts came with too many restrictions. If you have access, `uv run dvc pull` gets you every version we've snapshotted. See [docs/dvc_guide.md](docs/dvc_guide.md) for setup, everyday commands and troubleshooting.
 
 ## Tests
 
@@ -285,7 +285,7 @@ finmlops-data-pipeline/
 │   ├── schema/               # TFDV schema (in git)
 │   └── validation/           # TFDV stats and reports by date (not in git)
 ├── docs/
-│   ├── dvc_guide.md          # DVC setup (local and GCS) and commands
+│   ├── dvc_guide.md          # DVC setup (GCS bucket) and commands
 │   └── submission_checklist.md # where each rubric point is covered in the repo
 ├── logs/                     # Airflow task logs (not in git)
 ├── scripts/
