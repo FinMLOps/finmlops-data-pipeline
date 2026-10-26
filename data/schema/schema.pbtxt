@@ -56,7 +56,7 @@ feature {
   type: INT
   int_domain {
     min: 0
-    max: 45
+    max: 237
   }
   presence {
     min_fraction: 1.0
@@ -72,7 +72,7 @@ feature {
   type: INT
   int_domain {
     min: 1
-    max: 450
+    max: 1365
   }
   presence {
     min_fraction: 1.0
@@ -93,7 +93,7 @@ feature {
   type: INT
   int_domain {
     min: 1
-    max: 1500
+    max: 11193
   }
   presence {
     min_count: 1

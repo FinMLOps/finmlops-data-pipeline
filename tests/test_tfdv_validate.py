@@ -14,6 +14,7 @@ from scripts.preprocess import finnhub_row, marketaux_row
 from scripts.tfdv_validate import (
     DataValidationError,
     alert_text,
+    build_schema,
     coverage,
     coverage_anomalies,
     infer_schema,
@@ -323,3 +324,15 @@ def test_volume_spike_flagged(schema):
     previous, _ = validate(frame(good_batch(10)), schema)
     _, anomalies = validate(frame(good_batch(40)), schema, previous)
     assert anomalies.dataset_anomaly_info.reason  # 4x more articles than the previous day
+
+
+def test_build_schema_uses_every_day(tmp_path):
+    raw, schema_path = tmp_path / "raw", tmp_path / "schema.pbtxt"
+    write_day(raw, DAY, good_items())
+    long_title = {**finnhub_item(1), "headline": "x" * 300}
+    write_day(raw, date(2026, 10, 21), good_items(30) + [(1, long_title)])
+
+    build_schema(DAY, date(2026, 10, 21), raw_root=raw, schema_path=schema_path)
+
+    schema = tfdv.load_schema_text(str(schema_path))
+    assert tfdv.get_domain(schema, "title_len").max == 900  # 3x the longest title, from the second day

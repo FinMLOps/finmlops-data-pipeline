@@ -42,15 +42,15 @@ If we ever add another API, we only need to write one new `*_row()` function and
 
 ### 2.3 Test modules
 
-We have 72 tests using pytest. None of them call the real APIs or send real emails (we mock those with `respx` and a fake SMTP server), so they're free to run as often as we want. GitHub Actions runs them on every push and PR to `main` (`.github/workflows/pytest.yml`).
+We have 74 tests using pytest. None of them call the real APIs or send real emails (we mock those with `respx` and a fake SMTP server), so they're free to run as often as we want. GitHub Actions runs them on every push and PR to `main` (`.github/workflows/pytest.yml`).
 
 | File | Tests | What they check |
 |---|---|---|
 | `tests/test_preprocess.py` | 12 | mapping fields for each API, HTML cleanup, standardizing tickers, dropping bad records, one row per ticker, keeping the earliest duplicate, broken raw lines, our old raw format, no raw data at all |
-| `tests/test_tfdv_validate.py` | 27 | schema domains, bad values, unknown tickers or sources, outliers, stale and future articles, ticker drift, too few or too many articles, a missing source or ticker, one source dropping by half, duplicate spikes, non-English articles, corrupt lines, a missing day |
+| `tests/test_tfdv_validate.py` | 28 | building the schema from several days, schema domains, bad values, unknown tickers or sources, outliers, stale and future articles, ticker drift, too few or too many articles, a missing source or ticker, one source dropping by half, duplicate spikes, non-English articles, corrupt lines, a missing day |
 | `tests/test_ingest.py` | 10 | saving raw data as received, one source failing while the other still works, missing API keys, every request failing, never overwriting files, retrying 5xx but not 4xx, CLI options, date folders |
 | `tests/test_schemas.py` | 9 | parsing timestamps and converting them to UTC, IDs, the article data classes |
-| `tests/test_finnhub.py` | 4 | missing key, a normal fetch, HTTP errors, invalid JSON |
+| `tests/test_finnhub.py` | 5 | missing key, a normal fetch, HTTP errors, invalid JSON, window boundaries |
 | `tests/test_marketaux.py` | 5 | missing key, a normal fetch, pagination, HTTP errors, keeping earlier pages when a later page fails |
 | `tests/test_alert_utils.py` | 5 | email sent or skipped, a broken email never crashes anything, what the Airflow failure email contains (with and without the task log) |
 
@@ -93,7 +93,7 @@ We have three DAGs:
 
 We used TFDV for this, in `scripts/tfdv_validate.py`. The `tfdv_validate` task runs it every day.
 
-- **Schema:** `data/schema/schema.pbtxt`. We made it from a full day of real data (24 Oct 2026, 274 articles) and committed it to git, so every later day gets checked against the same thing. `infer_schema()` adds allowed values, required fields and ranges on top of what TFDV infers.
+- **Schema:** `data/schema/schema.pbtxt`. We first made it from a single day (24 Oct 2026, 274 articles), but once we had a month of data that turned out to be too narrow: normal weekday articles with long summaries or lots of tickers got flagged as outliers. So we rebuilt it from two full weeks (12 to 23 Oct, 6,020 articles) with `--baseline 2026-10-12 2026-10-23` and committed it to git, so every later day gets checked against the same thing. `infer_schema()` adds allowed values, required fields and ranges on top of what TFDV infers.
 - **Statistics:** each day's stats, anomalies, a JSON report and an HTML stats page are saved to `data/validation/YYYY/MM/DD/`.
 - **Over time:** each day is compared with the last validated day to catch drift (L-infinity distance for categories, Jensen-Shannon for numbers) and big changes in how many articles we got.
 

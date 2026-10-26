@@ -13,7 +13,7 @@ import json
 import logging
 import math
 from collections import Counter
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -355,6 +355,24 @@ def run(
     return report
 
 
+def build_schema(start, end, raw_root=RAW_DIR, schema_path=SCHEMA_PATH):
+    """Infer the schema from several days of raw data (start to end, inclusive) and save it."""
+    frames = []
+    for n in range((end - start).days + 1):
+        day = start + timedelta(days=n)
+        records, _ = load_day(_day_dir(raw_root, day))
+        if records:
+            frames.append(to_frame(records, day))
+    if not frames:
+        raise FileNotFoundError(f"no raw files from {start} to {end} under {raw_root}")
+    stats = tfdv.generate_statistics_from_dataframe(pd.concat(frames, ignore_index=True))
+    schema_path = Path(schema_path)
+    schema_path.parent.mkdir(parents=True, exist_ok=True)
+    tfdv.write_schema_text(infer_schema(stats), str(schema_path))
+    log.info("inferred schema from %s to %s at %s; review and commit it", start, end, schema_path)
+    return schema_path
+
+
 if __name__ == "__main__":
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
@@ -364,7 +382,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--refresh-schema", action="store_true", help="re-infer the schema from this day"
     )
+    parser.add_argument(
+        "--baseline",
+        nargs=2,
+        type=date.fromisoformat,
+        metavar=("START", "END"),
+        help="only rebuild the schema, from all days START to END (YYYY-MM-DD)",
+    )
     args = parser.parse_args()
+    if args.baseline:
+        print(build_schema(*args.baseline))
+        raise SystemExit
     try:
         result = run(args.day, refresh_schema=args.refresh_schema)
     except DataValidationError as exc:

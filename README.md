@@ -236,10 +236,11 @@ Lines it can't read (bad JSON, no timestamp, unknown source) get skipped and cou
 > [!TIP]
 > Open `data/validation/YYYY/MM/DD/stats.html` in a browser for a visual overview of the day's data. It's useful for screenshots in the report.
 
-If there's no schema yet, the first run creates one from that day's data. Make sure that's a full, normal day (not a partial or test day), look over it, and commit it. After that it stays the same. To rebuild it from a good day on purpose:
+Our schema is built from two full weeks of real data (12 to 23 Oct 2026), so normal weekday variety (long summaries, market roundups that mention dozens of tickers) doesn't get flagged. It stays the same until we rebuild it on purpose:
 ```bash
-uv run python -m scripts.tfdv_validate 2026-10-26 --refresh-schema
+uv run python -m scripts.tfdv_validate --baseline 2026-10-12 2026-10-23   # every day from START to END
 ```
+Look over the diff and commit it. If there's no schema at all, the first validation run creates one from that single day instead (`--refresh-schema` forces that too), but a range of normal days makes a much better baseline.
 
 ## Alerts
 
