@@ -15,8 +15,8 @@ with DAG(
     dag_id="process_news",
     # 00:30 UTC: the day is over and the midnight ingest runs have had time to finish
     schedule=CronDataIntervalTimetable("30 0 * * *", timezone="UTC"),
-    start_date=pendulum.datetime(2026, 10, 1, tz="UTC"),
-    catchup=False,
+    start_date=pendulum.datetime(2026, 10, 26, tz="UTC"),
+    catchup=True,
     max_active_runs=1,
     default_args={
         "retries": 1,

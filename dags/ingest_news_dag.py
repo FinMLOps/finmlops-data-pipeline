@@ -19,8 +19,8 @@ for source, cron in SCHEDULES.items():
         dag_id=f"ingest_{source}",
         # gives each run a [start, end) window to fetch; Airflow 3's default cron timetable doesn't
         schedule=CronDataIntervalTimetable(cron, timezone="UTC"),
-        start_date=pendulum.datetime(2026, 10, 1, tz="UTC"),
-        catchup=False,  # don't backfill every window since start_date
+        start_date=pendulum.datetime(2026, 10, 26, tz="UTC"),
+        catchup=True,  # after the laptop sleeps, run the windows it missed
         max_active_runs=1,
         default_args={
             "retries": 2,
