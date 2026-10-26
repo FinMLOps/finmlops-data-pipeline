@@ -3,7 +3,7 @@
 Maps data/raw/YYYY/MM/DD/*.jsonl (API items as received) to common rows with
 preprocess.load_raw, flattens them into one row of features per article, generates
 statistics, and checks them against a frozen schema (data/schema/schema.pbtxt)
-and the previous day's statistics (drift and volume drop). Outputs go to
+and the statistics of the last validated day on the same weekday (drift and volume). Outputs go to
 data/validation/YYYY/MM/DD/. Any anomaly raises DataValidationError so the
 Airflow task fails; the CLI also sends an email alert.
 """
@@ -44,8 +44,8 @@ INT_FEATURES = (
 )
 CATEGORICAL_DRIFT = 0.3  # max L-infinity distance between day-over-day distributions
 NUMERIC_DRIFT = 0.3  # max Jensen-Shannon divergence for numeric features
-MIN_VOLUME_FRACTION = 0.5  # alert when articles drop by more than 50% vs previous day
-MAX_VOLUME_FRACTION = 3.0  # alert when articles more than triple vs previous day (pagination bug, duplicates)
+MIN_VOLUME_FRACTION = 0.5  # alert when articles drop by more than 50% vs the same weekday before
+MAX_VOLUME_FRACTION = 3.0  # alert when articles more than triple vs the same weekday before (pagination bug, duplicates)
 MAX_DUPLICATE_RATE = 0.6  # alert when over 60% of a source's items repeat a URL (normal is ~0.25-0.3)
 OUTLIER_FACTOR = 3  # length/count outlier: more than 3x the largest baseline value
 MAX_AGE_DAYS = 7  # stale: published more than a week before the batch day
@@ -213,7 +213,7 @@ def coverage_anomalies(counts, previous=None):
         if n == 0:
             problems.append(f"no articles from {src}")
         elif before and n < before * MIN_VOLUME_FRACTION:
-            problems.append(f"{src}: {n} articles vs {before} on the previous day")
+            problems.append(f"{src}: {n} articles vs {before} on the same weekday before")
     for ticker in TICKERS:
         if counts["ticker"].get(ticker, 0) == 0:
             problems.append(f"no articles for {ticker}")
@@ -243,11 +243,11 @@ def validate(df, schema, previous=None):
 
 
 def write_html(stats, previous, path, day):
-    """Facets overview of today's stats (side by side with the previous day, if any)."""
+    """Facets overview of today's stats (side by side with the same weekday before, if any)."""
     from tensorflow_data_validation.utils.display_util import get_statistics_html
 
     if previous is not None:
-        body = get_statistics_html(stats, previous, lhs_name=str(day), rhs_name="previous day")
+        body = get_statistics_html(stats, previous, lhs_name=str(day), rhs_name="same weekday before")
     else:
         body = get_statistics_html(stats, lhs_name=str(day))
     path.write_text(
@@ -271,23 +271,28 @@ def _day_dir(root, day):
 
 
 def _latest_before(day, root, name):
-    """Path of `name` in the latest validated day folder before `day`, or None."""
+    """Path of `name` in the latest validated day before `day` on the same weekday, or None.
+
+    News volume has a strong weekly pattern (weekends get about a third of weekday
+    articles), so Saturday is compared with last Saturday, not with Friday.
+    """
     earlier = []
     for path in root.glob(f"*/*/*/{name}"):
         y, m, d = path.parent.relative_to(root).parts
-        if (past := date(int(y), int(m), int(d))) < day:
+        past = date(int(y), int(m), int(d))
+        if past < day and past.weekday() == day.weekday():
             earlier.append((past, path))
     return max(earlier)[1] if earlier else None
 
 
 def previous_stats(day, root=VALIDATION_DIR):
-    """Stats from the latest validated day before `day`, if any."""
+    """Stats from the latest validated same weekday before `day`, if any."""
     path = _latest_before(day, root, "stats.pbtxt")
     return tfdv.load_stats_text(str(path)) if path else None
 
 
 def previous_counts(day, root=VALIDATION_DIR):
-    """Coverage counts saved in the latest earlier report.json, if any."""
+    """Coverage counts from the latest validated same weekday before `day`, if any."""
     path = _latest_before(day, root, "report.json")
     return json.loads(path.read_text()).get("counts") if path else None
 

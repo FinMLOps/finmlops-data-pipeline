@@ -42,12 +42,12 @@ If we ever add another API, we only need to write one new `*_row()` function and
 
 ### 2.3 Test modules
 
-We have 74 tests using pytest. None of them call the real APIs or send real emails (we mock those with `respx` and a fake SMTP server), so they're free to run as often as we want. GitHub Actions runs them on every push and PR to `main` (`.github/workflows/pytest.yml`).
+We have 75 tests using pytest. None of them call the real APIs or send real emails (we mock those with `respx` and a fake SMTP server), so they're free to run as often as we want. GitHub Actions runs them on every push and PR to `main` (`.github/workflows/pytest.yml`).
 
 | File | Tests | What they check |
 |---|---|---|
 | `tests/test_preprocess.py` | 12 | mapping fields for each API, HTML cleanup, standardizing tickers, dropping bad records, one row per ticker, keeping the earliest duplicate, broken raw lines, our old raw format, no raw data at all |
-| `tests/test_tfdv_validate.py` | 28 | building the schema from several days, schema domains, bad values, unknown tickers or sources, outliers, stale and future articles, ticker drift, too few or too many articles, a missing source or ticker, one source dropping by half, duplicate spikes, non-English articles, corrupt lines, a missing day |
+| `tests/test_tfdv_validate.py` | 29 | building the schema from several days, comparing with the same weekday, schema domains, bad values, unknown tickers or sources, outliers, stale and future articles, ticker drift, too few or too many articles, a missing source or ticker, one source dropping by half, duplicate spikes, non-English articles, corrupt lines, a missing day |
 | `tests/test_ingest.py` | 10 | saving raw data as received, one source failing while the other still works, missing API keys, every request failing, never overwriting files, retrying 5xx but not 4xx, CLI options, date folders |
 | `tests/test_schemas.py` | 9 | parsing timestamps and converting them to UTC, IDs, the article data classes |
 | `tests/test_finnhub.py` | 5 | missing key, a normal fetch, HTTP errors, invalid JSON, window boundaries |
@@ -95,7 +95,7 @@ We used TFDV for this, in `scripts/tfdv_validate.py`. The `tfdv_validate` task r
 
 - **Schema:** `data/schema/schema.pbtxt`. We first made it from a single day (24 Oct 2026, 274 articles), but once we had a month of data that turned out to be too narrow: normal weekday articles with long summaries or lots of tickers got flagged as outliers. So we rebuilt it from two full weeks (12 to 23 Oct, 6,020 articles) with `--baseline 2026-10-12 2026-10-23` and committed it to git, so every later day gets checked against the same thing. `infer_schema()` adds allowed values, required fields and ranges on top of what TFDV infers.
 - **Statistics:** each day's stats, anomalies, a JSON report and an HTML stats page are saved to `data/validation/YYYY/MM/DD/`.
-- **Over time:** each day is compared with the last validated day to catch drift (L-infinity distance for categories, Jensen-Shannon for numbers) and big changes in how many articles we got.
+- **Over time:** each day is compared with the same weekday a week earlier to catch drift (L-infinity distance for categories, Jensen-Shannon for numbers) and big changes in how many articles we got. We started by comparing with the day before, but after backfilling a month of data every Saturday got flagged for low volume and every Monday for a spike, since weekends only get about a third of the weekday news. Comparing Saturday with last Saturday got rid of those false alarms.
 
 ### 2.8 Anomaly detection and alerts
 
@@ -105,8 +105,8 @@ We used TFDV for this, in `scripts/tfdv_validate.py`. The `tfdv_validate` task r
 | Wrong formats | `source`, `symbol` and `language` have to be values we expect, `published_hour` has to be 0–23, and lines we can't read are skipped and counted |
 | Outliers | a title, summary or number of tickers more than 3x the biggest one in our baseline |
 | Old articles | `age_days` has to be between 0 and 7 |
-| Drift | the ticker mix and text lengths compared with the day before |
-| Volume | less than half or more than 3x the articles of the day before |
+| Drift | the ticker mix and text lengths compared with the same weekday a week earlier |
+| Volume | less than half or more than 3x the articles of the same weekday a week earlier |
 | Coverage | a source or ticker with no articles at all, or one source dropping by half (`coverage_anomalies()`) |
 | Duplicates | more than 60% of a source's articles repeating a URL |
 

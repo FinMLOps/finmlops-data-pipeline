@@ -222,14 +222,14 @@ uv run python -m scripts.preprocess
 | Feature | What we check |
 |---|---|
 | `source` | required, must be `finnhub` or `marketaux` |
-| `symbol` | required, must be one of our tickers, and the mix of tickers shouldn't shift too much from the day before |
+| `symbol` | required, must be one of our tickers, and the mix of tickers shouldn't shift too much from the same weekday a week earlier |
 | `title_len` | required, can't be empty, flagged if over 3x the longest title in the baseline, and checked for drift |
 | `published_hour` | required, 0 to 23 |
 | `age_days` | how old the article is compared to the day we're validating, must be 0 to 7 |
 | `summary_len` | optional, flagged if over 3x the baseline max, and checked for drift |
 | `n_symbols` | optional, flagged if over 3x the baseline max |
 | `has_url`, `publisher` | optional, we keep `publisher` for bias slicing later |
-| number of articles | flagged if we got less than half the articles of the last validated day (usually means an API quietly failed). Validate full days only, a partial day will trip this |
+| number of articles | flagged if we got less than half (or more than 3x) the articles of the same weekday a week earlier (usually means an API quietly failed). We compare with the same weekday because weekends get about a third of the weekday news. Validate full days only, a partial day will trip this |
 
 Lines it can't read (bad JSON, no timestamp, unknown source) get skipped and counted. Every run saves the stats, any anomalies, a JSON report and an HTML stats page to `data/validation/YYYY/MM/DD/`. The HTML page needs internet to load. If anything looks wrong it raises an error, so the Airflow task fails, and when you run it from the terminal it also sends an email alert.
 

@@ -19,6 +19,7 @@ from scripts.tfdv_validate import (
     coverage_anomalies,
     infer_schema,
     load_day,
+    previous_counts,
     run,
     to_frame,
     to_row,
@@ -305,7 +306,7 @@ def test_coverage_flags_one_source_halving():
     # total barely moves (finnhub dominates), but marketaux drops from 20 to 5
     previous = {"source": {"finnhub": 200, "marketaux": 20}}
     counts = {"source": {"finnhub": 210, "marketaux": 5}, "ticker": dict.fromkeys(TICKERS, 1), "duplicate_rate": {}}
-    assert coverage_anomalies(counts, previous) == ["marketaux: 5 articles vs 20 on the previous day"]
+    assert coverage_anomalies(counts, previous) == ["marketaux: 5 articles vs 20 on the same weekday before"]
 
 
 def test_coverage_flags_duplicate_spike():
@@ -336,3 +337,13 @@ def test_build_schema_uses_every_day(tmp_path):
 
     schema = tfdv.load_schema_text(str(schema_path))
     assert tfdv.get_domain(schema, "title_len").max == 900  # 3x the longest title, from the second day
+
+
+def test_compares_with_same_weekday(tmp_path):
+    for day, n in ((date(2026, 10, 19), 600), (date(2026, 10, 25), 180)):  # a Monday and a Sunday
+        out = tmp_path / day.strftime("%Y/%m/%d")
+        out.mkdir(parents=True)
+        (out / "report.json").write_text(json.dumps({"counts": {"source": {"finnhub": n}}}))
+
+    counts = previous_counts(date(2026, 10, 26), tmp_path)  # Monday
+    assert counts["source"]["finnhub"] == 600  # last Monday, not yesterday (Sunday)
