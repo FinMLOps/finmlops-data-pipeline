@@ -60,10 +60,11 @@ We have three DAGs:
 
 | DAG | File | Runs (UTC) | Tasks |
 |---|---|---|---|
-| `ingest_finnhub` | `dags/ingest_news_dag.py` | every hour | `ingest`, which fetches exactly that hour |
-| `ingest_marketaux` | `dags/ingest_news_dag.py` | every 6 hours | `ingest`, which fetches exactly those 6 hours |
-| `process_news` | `dags/process_news_dag.py` | every day at 00:30 | `tfdv_validate` >> `preprocess` |
+| `ingest_finnhub` | `dags/ingest_news_dag.py` | every hour | `ingest`, which fetches one hour, 6 hours late |
+| `ingest_marketaux` | `dags/ingest_news_dag.py` | every 6 hours | `ingest`, which fetches one 6-hour window, 6 hours late |
+| `process_news` | `dags/process_news_dag.py` | every day at 06:30 | `tfdv_validate` >> `preprocess` |
 
+- Every run fetches a window that ended 6 hours earlier. When we compared the hourly runs with fetching the same hours again later, they had only gotten 26 of 338 articles (about 8%), because the APIs make new articles available a few hours after they're published. `process_news` runs at 06:30 so the day's last windows are in first.
 - Every run gets its own `[start, end)` time window from `CronDataIntervalTimetable`. With `catchup=True`, if the laptop running Airflow was asleep, Airflow goes back and runs the windows it missed.
 - `preprocess` only runs if validation passed, so bad data never makes it into `news.parquet`.
 - Ingest retries twice, 5 minutes apart. Validation doesn't retry, since bad data won't fix itself on a retry.
@@ -145,7 +146,7 @@ But this is about how much news each company gets, not bias in the usual sense. 
 | Guideline | Where |
 |---|---|
 | Folder structure | `dags/`, `data/`, `scripts/`, `tests/`, `logs/`, `dvc.yaml` and `README.md` (the README has the full tree under "Project structure") |
-| README | `README.md` covers setup, running the pipeline, how the code is organized, DVC and reproducibility |
+| README | `README.md` covers setup, running the pipeline, how the code is organized, DVC and reproducibility, with the details in `docs/setup.md` (setup, platforms, running things by hand) and `docs/pipeline.md` (schedules, validation checks, alerts) |
 | Reproducibility | a fixed Python version (`.python-version`), locked dependencies (`uv.lock`), Docker for Airflow, `.env.example`, the schema in git and DVC for the data |
 | Code style | small functions that each do one thing, one file per API, shared code in `scripts/helpers/` |
 | Error handling | retries with backoff for 429/5xx, one source or ticker failing doesn't stop the rest, a missing API key just skips that source, broken raw lines are skipped and counted, raw files are never overwritten, a broken alert never hides the real error, and Airflow retries failed tasks |
