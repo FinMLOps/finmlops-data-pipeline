@@ -74,3 +74,7 @@ def test_airflow_failure_callback_emails_task_details(monkeypatch):
     assert msg["Subject"] == "[FinMLOps] process_news.tfdv_validate failed"
     assert "scheduled__2026-10-25" in msg.get_content()
     assert "boom" in msg.get_content()
+
+
+def test_deliberate_ci_failure():
+    assert False, "deliberate failure to screenshot the CI alert email"
