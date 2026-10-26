@@ -10,7 +10,7 @@ import pytest
 import respx
 
 from scripts.fetch_finnhub import FinnhubSource
-from scripts.helpers.base import SourceError
+from scripts.helpers.base import SourceError, in_window
 
 NOW = datetime(2026, 10, 12, 16, 0, 0, tzinfo=timezone.utc)
 SINCE = NOW - timedelta(days=7)
@@ -83,3 +83,10 @@ def test_finnhub_invalid_json():
     )
     with pytest.raises(SourceError, match="invalid JSON"):
         run(FinnhubSource(api_key="mock_key"))
+
+
+def test_in_window_is_half_open():
+    since = datetime(2026, 10, 16, tzinfo=timezone.utc)
+    until = datetime(2026, 10, 17, tzinfo=timezone.utc)
+    assert in_window(since, since, until)  # start belongs to this window
+    assert not in_window(until, since, until)  # end belongs to the next one

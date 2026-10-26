@@ -100,7 +100,7 @@ class NewsSource(ABC):
     async def fetch(
         self, query: str, since: datetime, until: datetime, client: httpx.AsyncClient
     ) -> list[dict[str, Any]]:
-        """Fetch raw API items for a ticker symbol in [since, until]."""
+        """Fetch raw API items for a ticker symbol in [since, until)."""
 
     async def _get_json(
         self,
@@ -139,7 +139,8 @@ class NewsSource(ABC):
 
 
 def in_window(published: datetime, since: datetime, until: datetime) -> bool:
-    return since <= published <= until
+    """[since, until): an article published exactly at `until` belongs to the next window."""
+    return since <= published < until
 
 
 def _short(text: str, limit: int = 200) -> str:
