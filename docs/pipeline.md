@@ -28,6 +28,10 @@ At first every run fetched the window that had just ended (the 10:00 run fetched
 | fetched hourly, right after each hour ended | 26 |
 | fetched again a few hours later | 338 |
 
+![An ingest_finnhub run that found 0 articles](assets/finnhub_run_17utc.png)
+
+*The 17:00 UTC Finnhub run on 26 Oct, before the fix: it fetched 16:00 to 17:00, noon on a Monday in New York, and found 0 articles for all 7 tickers.*
+
 So the hourly runs were only getting about 8% of the articles. Finnhub (and probably Marketaux) makes articles available a few hours after they're published, and since each run only asks for its own window, the late ones were never picked up. Now each run fetches the window that ended 6 hours ago, which is about twice the delay we saw.
 
 ### Why hourly for Finnhub and every 6 hours for Marketaux

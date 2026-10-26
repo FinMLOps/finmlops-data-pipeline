@@ -98,6 +98,20 @@ We used TFDV for this, in `scripts/tfdv_validate.py`. The `tfdv_validate` task r
 - **Statistics:** each day's stats, anomalies, a JSON report and an HTML stats page are saved to `data/validation/YYYY/MM/DD/`.
 - **Over time:** each day is compared with the same weekday a week earlier to catch drift (L-infinity distance for categories, Jensen-Shannon for numbers) and big changes in how many articles we got. We started by comparing with the day before, but after backfilling a month of data every Saturday got flagged for low volume and every Monday for a spike, since weekends only get about a third of the weekday news. Comparing Saturday with last Saturday got rid of those false alarms.
 
+Here's the stats page for 22 Oct, a normal Thursday that passed validation. Blue is 22 Oct and orange is the same weekday a week earlier (15 Oct), which is what it gets compared with:
+
+![TFDV stats page for 22 Oct 2026](assets/tfdv_stats_22oct.png)
+
+*`data/validation/2026/10/22/stats.html`: numeric features on the left, categorical on the right.*
+
+A few things it shows:
+- **`source`:** 22 Oct has both APIs (620 Finnhub, 51 Marketaux), while 15 Oct only has Finnhub, since we backfilled Marketaux for fewer days.
+- **`n_symbols`:** every Finnhub article is about one ticker, so 15 Oct is all 1s. The articles that mention many tickers (up to 79 on 22 Oct) all come from Marketaux, which lists every company an article mentions.
+- **`publisher`:** Marketaux also adds variety, with 22 publishers on 22 Oct against 5 on 15 Oct.
+- **`published_hour`:** most news comes out during the US day, peaking around 14:00 to 16:00 UTC (10 AM to noon in New York), and both days have the same shape.
+- **`age_days`:** 100% zeros, highlighted in red by the viewer, just means every article was published on the day we're validating. That's what we want.
+- **`language`:** everything is `en`.
+
 ### 2.8 Anomaly detection and alerts
 
 | Problem | How we catch it |
@@ -115,31 +129,64 @@ If anything is found, `tfdv_validate` raises an error. The Airflow task fails, `
 
 ### 2.9 Pipeline flow optimization
 
-Right now the Gantt chart doesn't tell us much. We only have a few days of data, so every task finishes in a few seconds and there's no slow bar to look at. We need a few weeks of data before a bottleneck actually shows up.
+We used Airflow's Gantt chart and the task logs to see where each DAG run spends its time.
 
-We already know where it'll be, though. `ingest_finnhub` and `ingest_marketaux` only have one task each and only fetch their own time window, so they take about the same time every run. In `process_news`, `tfdv_validate` also only looks at one day. But `preprocess` re-reads all the raw data we've ever collected every time it runs, so it gets a little slower every day (on day 40 it processes 40 days of data just to add one). We also can't run `tfdv_validate` and `preprocess` in parallel, because the whole point is to not preprocess data that failed validation.
+![Gantt chart of an ingest_marketaux run](assets/gantt_marketaux_12utc.png)
 
-So our plan is:
-1. Once we have a few weeks of data, take a Gantt screenshot of `process_news` showing `preprocess` as the long bar.
-2. Change `preprocess` to only process the day that was just validated and save it as its own file (like `data/processed/2026/10/26.parquet`), so it takes the same time no matter how much history we have.
-3. Take another screenshot and compare.
+*`ingest_marketaux`, 12:00 UTC run on 26 Oct: one task, 1 min 1 s. The bars at the top are the run times of the last few runs.*
 
-> [!IMPORTANT]
-> Still to do: the before and after screenshots. We'll add them here once there's enough data for the difference to show.
+![Grid view and log of an ingest_finnhub run](assets/finnhub_run_13utc.png)
 
-What we've already done to keep things fast:
-- Ingestion fetches all tickers at the same time (async `httpx` in `scripts/ingest.py`) and not one after another.
+*`ingest_finnhub`, 13:00 UTC run on 26 Oct: 6.6 s. The bars at the top show its recent runs all took 3 to 7 s.*
+
+What we found, timing every task:
+
+| Task | Time per run | Where the time goes |
+|---|---|---|
+| `ingest_marketaux` | **33 s to 61 s** | waiting for Marketaux to answer |
+| `ingest_finnhub` | 3 s to 7 s | waiting for Finnhub to answer |
+| `tfdv_validate` | about 4 s | mostly importing TensorFlow (3 s) |
+| `preprocess` | under 1 s, for a whole month of data (11,284 raw records) | reading and cleaning |
+
+So the bottleneck is `ingest_marketaux`. The log in the Marketaux screenshot shows why: all 7 first-page requests went out at the same moment (12:00:13) and came back together at 12:00:36, so Marketaux itself takes 13 to 35 seconds to answer each request. Tickers with more news then need a second page, and a page can only be asked for after the previous one comes back (AAPL's and GOOGL's second pages came back at 12:01:01). It's the API, not our code: there were no retries or errors.
+
+This is also why we fetch all tickers at the same time (async `httpx` in `scripts/ingest.py`). Done one ticker after another, the same run would take 7 times the ~23 s wait just for the first pages, about 2 to 3 minutes, instead of about a minute.
+
+What we decided:
+- **Leave `ingest_marketaux` as it is.** It runs every 6 hours, so a minute is fine. We could ask for pages 2 and 3 at the same time as page 1, but that would spend requests on pages that might be empty, and Marketaux only gives us about 100 a day.
+- **Don't optimize `preprocess` yet.** We had planned to make it process only the newest day, since it re-reads all the raw data every run. But with a month of data it still takes under a second, so it's not worth it. It would only matter with much more data (about a year would still be around 10 seconds).
+- **We can't run `tfdv_validate` and `preprocess` in parallel,** since the whole point is to not preprocess data that failed validation.
+
+Other things we did to keep the pipeline fast:
 - Finnhub and Marketaux have separate DAGs, so they run in parallel and one failing doesn't hold up the other.
 - We cleaned up the Docker build with cache mounts and two stages, and rebuilding after a dependency change went from 166 s to 51 s.
 
 ## 3. Data bias detection using data slicing
 
-When we started collecting data, we thought one ticker might end up with a lot more articles than the others. That did happen: so far NVDA has 122 of our 280 articles (~44%), about 4-6x more than any other ticker (TSLA has 31, AMZN has 21). Most of this is from one day (24 Oct), but it's what we expected, since NVDA is in the news a lot more.
+When we started collecting data, we thought one ticker might end up with a lot more articles than the others, and at first it looked like that was happening. After our first full day (24 Oct), NVDA had 122 of our 280 articles (44%), about 4 to 6 times more than any other ticker.
 
-But this is about how much news each company gets, not bias in the usual sense. Our data is stock market news about 7 companies. There are no people in it, so there's nothing like age, gender or location to slice by, and we couldn't find a kind of bias that would actually apply unless we really dug deep looking for flaws. Because of that, the bias detection and mitigation section (3.1 to 3.4) doesn't really apply to our project, and we confirmed with our professor that we can skip it.
+Then we backfilled every day from 1 Oct, and the imbalance mostly went away:
+
+| Ticker | Articles, 1 to 26 Oct | Share |
+|---|---|---|
+| NVDA | 2,073 | 18.5% |
+| GOOGL | 1,792 | 16.0% |
+| META | 1,646 | 14.7% |
+| MSFT | 1,588 | 14.2% |
+| AMZN | 1,577 | 14.1% |
+| TSLA | 1,426 | 12.7% |
+| AAPL | 1,120 | 10.0% |
+
+Over almost a month, NVDA went from 44% down to 18.5%, and the most-covered ticker has about twice as many articles as the least-covered one, not 4 to 6 times. The 44% came from that one day: 24 Oct was simply a big NVDA news day (it's still 45% NVDA in the backfilled data). So the imbalance we saw at first came from what was in the news that day, not from how we collect the data, and it evens out over time.
+
+There are two other skews, and both come from where the data comes from, not from anything about people:
+- **Source:** 98% of the articles are from Finnhub, because Finnhub has no daily limit and we could backfill the whole month, while Marketaux only allows about 100 requests a day. This gets better as Marketaux keeps collecting.
+- **Publisher:** 74% of the articles are from Yahoo, then Benzinga (15%) and SeekingAlpha (5%), because that's mostly what Finnhub's company news is made of.
+
+None of this is bias in the usual sense, though. It's about how much news each company gets and where it comes from. Our data is stock market news about 7 companies. There are no people in it, so there's nothing like age, gender or location to slice by, and we couldn't find a kind of bias that would actually apply unless we really dug deep looking for flaws. Because of that, the bias detection and mitigation section (3.1 to 3.4) doesn't really apply to our project, and we confirmed with our professor that we can skip it.
 
 > [!NOTE]
-> We still keep an eye on how many articles each source and ticker gets. The daily validation alerts us if a source or ticker disappears or a source drops by half (see 2.8). When we pick articles to hand-label for the model, we'll take the same number from each ticker so NVDA doesn't take over.
+> We still keep an eye on how many articles each source and ticker gets. The daily validation alerts us if a source or ticker disappears or a source drops by half (see 2.8). When we pick articles to hand-label for the model, we'll still take the same number from each ticker, so a big news day for one company can't take over the labeled data.
 
 ## 4. Additional guidelines
 
