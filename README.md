@@ -8,6 +8,16 @@ This is the data pipeline for our FinMLOps project. It pulls financial news for 
 > - We use [`uv`](https://docs.astral.sh/uv/), which is superior to `pip`.
 > - Python is pinned to `3.11` (`>=3.11,<3.12`) to ensure compatibility and stability across pipeline dependencies.
 
+## Team
+
+| Name | GitHub | Email |
+|---|---|---|
+| Nina Gharachorloo | [@ninaghar](https://github.com/ninaghar) | [gharachorloo.ni](mailto:gharachorloo.ni@northeastern.edu) |
+| Aayam Raj Shakya | [@aayamrajshakya](https://github.com/aayamrajshakya) | [shakya.aa](mailto:shakya.aa@northeastern.edu) |
+| Geethanjali Ravichandra | [@Alpha2505](https://github.com/Alpha2505) | [ravichandra.g](mailto:ravichandra.g@northeastern.edu) |
+| Kshitij Maurya | [@kmaurya9](https://github.com/kmaurya9) | [maurya.k](mailto:maurya.k@northeastern.edu) |
+| Keshav Girish Adkar | [@KESHAV8087](https://github.com/KESHAV8087) | [adkar.k](mailto:adkar.k@northeastern.edu) |
+
 ## How it works
 
 ```mermaid
