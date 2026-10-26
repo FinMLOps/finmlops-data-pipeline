@@ -285,7 +285,8 @@ finmlops-data-pipeline/
 │   ├── schema/               # TFDV schema (in git)
 │   └── validation/           # TFDV stats and reports by date (not in git)
 ├── docs/
-│   └── dvc_guide.md          # DVC setup (local and GCS) and commands
+│   ├── dvc_guide.md          # DVC setup (local and GCS) and commands
+│   └── submission_checklist.md # where each rubric point is covered in the repo
 ├── logs/                     # Airflow task logs (not in git)
 ├── scripts/
 │   ├── config.py             # the tickers we track
