@@ -20,7 +20,9 @@ We use [DVC](https://dvc.org) to version our data. Git keeps small pointer files
 **Take a snapshot** (record the current data as a new version, back it up, and commit the pointers):
 ```bash
 make snapshot
+git push
 ```
+`make snapshot` makes a commit on your machine, so `git push` is what actually puts the new version on GitHub for everyone else. If the data hasn't changed since the last snapshot, there's nothing to commit and nothing to push.
 That runs these four steps, which you can also run one by one:
 ```bash
 uv run dvc add data/raw     # fingerprint the raw data
@@ -31,6 +33,9 @@ git commit -m "Data snapshot 2026-10-26" -- data/raw.dvc dvc.lock
 
 > [!TIP]
 > The `git commit -- data/raw.dvc dvc.lock` part only commits those two files, so anything else you have staged is left alone. Push it with your normal `git push`.
+
+> [!IMPORTANT]
+> Always run DVC through `uv run` (`uv run dvc push`, `uv run dvc pull`, `uv run dvc status -c`). That's the DVC installed in our project with Google Cloud support. A plain `dvc` command might be a different install on your machine that doesn't have it, and you'll get `gs is supported, but requires 'dvc-gs' to be installed`.
 
 **Check what changed:**
 ```bash
@@ -130,6 +135,7 @@ uv run dvc push                                      # upload everything you've 
 | "Google Cloud Platform service has been disabled" | your account (usually a university one) isn't allowed to use Google Cloud this way. Ask for access to our bucket instead, or use a personal Google account |
 | `dvc push` hangs at "Querying remote cache" | DVC can't find credentials. Run `gcloud auth application-default login` |
 | "without a quota project" warning | harmless, reads and writes are billed to the bucket's project. To hide it: `gcloud auth application-default set-quota-project finmlops-pipeline` (needs access to the project, not just the bucket, so it may fail; that's fine) |
+| `gs is supported, but requires 'dvc-gs' to be installed` | you ran a plain `dvc` that isn't the project's. Use `uv run dvc …` instead (`make snapshot` already does) |
 | `dvc push` goes to `~/dvc-storage` and not the bucket | `.dvc/config.local` has its own default. Run `uv run dvc remote default --local --unset` |
 | `make snapshot` says "nothing to commit" | the data hasn't changed since the last snapshot, so there's nothing new to record |
 | `dvc checkout` says files are missing from the cache | the data was never pushed from the machine that made that snapshot; run `dvc push` there |
