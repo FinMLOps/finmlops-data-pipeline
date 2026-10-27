@@ -183,7 +183,11 @@ There are two other skews, and both come from where the data comes from, not fro
 - **Source:** 98% of the articles are from Finnhub, because Finnhub has no daily limit and we could backfill the whole month, while Marketaux only allows about 100 requests a day. This gets better as Marketaux keeps collecting.
 - **Publisher:** 74% of the articles are from Yahoo, then Benzinga (15%) and SeekingAlpha (5%), because that's mostly what Finnhub's company news is made of.
 
-None of this is bias in the usual sense, though. It's about how much news each company gets and where it comes from. Our data is stock market news about 7 companies. There are no people in it, so there's nothing like age, gender or location to slice by, and we couldn't find a kind of bias that would actually apply unless we really dug deep looking for flaws. Because of that, the bias detection and mitigation section (3.1 to 3.4) doesn't really apply to our project, and we confirmed with our professor that we can skip it.
+None of this is bias in the usual sense, though. It's about how much news each company gets and where it comes from. Financial news has no demographic attributes, so age/gender-style slicing does not apply: our data is stock market news about 7 companies, with no people in it to slice by.
+
+Maybe one bias in the data could be ambiguous financial language, like "revenue grew but missed estimates". Headlines like that mix good and bad news in one sentence, so they're hard to call positive or negative, both for a sentiment model and for us when we hand-label. If there are a lot of them, a model could learn to lean one way on all of them. But that's about how the model reads the text, not about who's in the data, so we can only really check it once we have a model. We'll do that in the model stage by marking mixed-signal headlines in our hand-labeled test set and checking the model's accuracy on just those.
+
+Apart from that, we couldn't find a kind of bias that would actually apply unless we really dug deep looking for flaws. Because of that, the bias detection and mitigation section (3.1 to 3.4) doesn't really apply to our project, and we confirmed with our professor that we can skip it.
 
 > [!NOTE]
 > We still keep an eye on how many articles each source and ticker gets. The daily validation alerts us if a source or ticker disappears or a source drops by half (see 2.8). When we pick articles to hand-label for the model, we'll still take the same number from each ticker, so a big news day for one company can't take over the labeled data.
@@ -197,3 +201,16 @@ None of this is bias in the usual sense, though. It's about how much news each c
 | Reproducibility | a fixed Python version (`.python-version`), locked dependencies (`uv.lock`), Docker for Airflow, `.env.example`, the schema in git and DVC for the data |
 | Code style | small functions that each do one thing, one file per API, shared code in `scripts/helpers/` |
 | Error handling | retries with backoff for 429/5xx, one source or ticker failing doesn't stop the rest, a missing API key just skips that source, broken raw lines are skipped and counted, raw files are never overwritten, a broken alert never hides the real error, and Airflow retries failed tasks |
+
+## What comes next: the model
+
+This repo stops at a clean, validated and versioned `news.parquet`. The model work happens in our [finmlops-model](https://github.com/FinMLOps/finmlops-model) repo, which pulls a specific version of the data with DVC. Here's the plan:
+
+1. **Get labels.** FinBERT sorts text into positive, neutral or negative, so we need articles with those labels. We have two ways to get them:
+   - **Hand-label Finnhub articles.** Finnhub doesn't give any sentiment, so we take a sample of its articles (the same number from each ticker) and label them ourselves as positive, neutral or negative.
+   - **Use Marketaux's sentiment scores.** Marketaux already gives each article a sentiment score per ticker, from -1 to 1. We can turn those scores into the three labels and strip the score from the data, so the model only sees the text. Since that score comes from Marketaux's own model, we'll check how often it agrees with our hand labels before trusting it.
+2. **Set the baseline.** We run the original, pretrained FinBERT on a test set it has never seen and record its scores (mainly macro F1, plus accuracy for each ticker). That's our baseline, and also our first champion model.
+3. **Fine-tune.** We fine-tune FinBERT on our labeled articles, with LoRA to keep it cheap. The data is split by date (train on earlier news, test on later news), so the model can't learn from the future, and the test set is never used for training.
+4. **Compare.** The fine-tuned model is a challenger. We score it on the same test set as the baseline. If it doesn't beat the baseline, the fine-tuning didn't help.
+5. **Gate the champion.** A challenger only replaces the champion if it scores better on the test set and isn't worse for any ticker. Every run is tracked in MLflow, so we can see exactly which data and settings produced each model.
+6. **Repeat.** As new news comes in, we label more of it, train a new challenger and run the same comparison, so the champion only gets replaced by something that's actually better.
