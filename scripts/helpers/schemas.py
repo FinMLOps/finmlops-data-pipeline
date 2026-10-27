@@ -17,7 +17,7 @@ def to_utc(dt: datetime) -> datetime:
 
 
 def parse_dt(value: Any) -> datetime:
-    """Parse timestamp formats used by Marketaux, Finnhub, and Alpha Vantage into aware UTC."""
+    """Parse timestamps (Finnhub's unix seconds, Marketaux's ISO 8601) into aware UTC."""
     if isinstance(value, datetime):
         return to_utc(value)
 
@@ -32,7 +32,7 @@ def parse_dt(value: Any) -> datetime:
         seconds = val / 1000.0 if val > _EPOCH_MS_THRESHOLD else float(val)
         return datetime.fromtimestamp(seconds, tz=UTC)
 
-    # Alpha Vantage fast path: YYYYMMDDTHHMMSS (e.g. 20241108T012400)
+    # compact form YYYYMMDDTHHMMSS (e.g. 20241108T012400)
     if len(text) == 15 and text[8] == "T" and text[:8].isdigit() and text[9:].isdigit():
         return datetime(
             int(text[:4]),
@@ -44,7 +44,7 @@ def parse_dt(value: Any) -> datetime:
             tzinfo=UTC,
         )
 
-    # Standard ISO 8601 (Marketaux, Finnhub)
+    # standard ISO 8601 (Marketaux)
     try:
         return to_utc(datetime.fromisoformat(text))
     except (TypeError, ValueError) as exc:

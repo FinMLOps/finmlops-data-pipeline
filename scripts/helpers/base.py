@@ -68,7 +68,7 @@ class SourceError(RuntimeError):
 
 
 class NewsSource(ABC):
-    """Abstract base class for financial news providers (Marketaux, Finnhub, Alpha Vantage)."""
+    """Abstract base class for financial news providers (Finnhub, Marketaux)."""
 
     type_name: ClassVar[str]
     env_key: ClassVar[str | None] = None

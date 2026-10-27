@@ -42,7 +42,7 @@ INT_FEATURES = (
     "published_hour",
     "age_days",
 )
-CATEGORICAL_DRIFT = 0.3  # max L-infinity distance between day-over-day distributions
+CATEGORICAL_DRIFT = 0.3  # max L-infinity distance from the same weekday a week earlier
 NUMERIC_DRIFT = 0.3  # max Jensen-Shannon divergence for numeric features
 MIN_VOLUME_FRACTION = 0.5  # alert when articles drop by more than 50% vs the same weekday before
 MAX_VOLUME_FRACTION = 3.0  # alert when articles more than triple vs the same weekday before (pagination bug, duplicates)

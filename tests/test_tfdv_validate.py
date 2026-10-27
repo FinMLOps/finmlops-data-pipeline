@@ -324,7 +324,7 @@ def test_non_english_article_flagged(schema):
 def test_volume_spike_flagged(schema):
     previous, _ = validate(frame(good_batch(10)), schema)
     _, anomalies = validate(frame(good_batch(40)), schema, previous)
-    assert anomalies.dataset_anomaly_info.reason  # 4x more articles than the previous day
+    assert anomalies.dataset_anomaly_info.reason  # 4x more articles than the day it's compared with
 
 
 def test_build_schema_uses_every_day(tmp_path):
