@@ -35,9 +35,9 @@ flowchart LR
     P --> O[("data/processed/<br/>news.parquet")]
 ```
 
-**Ingest** (`scripts/ingest.py`) fetches news for every ticker from both APIs at the same time and saves the responses as-is, one JSONL file per source, under `data/raw/YYYY/MM/DD/`. Each run fetches a window that ended 6 hours earlier, because the APIs take a few hours to make new articles available (see [docs/pipeline.md](docs/pipeline.md#why-each-run-fetches-6-hours-late)). Files go in the folder of the day the fetch window starts, and we never overwrite raw files. If an API rate limits us or has a server error, the request is retried a few times, and if one source or ticker fails the rest still get saved.
+**Ingest** (`scripts/ingest.py`) fetches news for every ticker from both APIs at the same time and saves the responses as-is, one JSONL file per source, under `data/raw/YYYY/MM/DD/`. Each run fetches a window that ended 6 hours earlier, because the APIs take a few hours to make new articles available (see [docs/PIPELINE.md](docs/PIPELINE.md#why-each-run-fetches-6-hours-late)). Files go in the folder of the day the fetch window starts, and we never overwrite raw files. If an API rate limits us or has a server error, the request is retried a few times, and if one source or ticker fails the rest still get saved.
 
-**Validate** (`scripts/tfdv_validate.py`) checks one day of raw data against a saved schema using TFDV. It catches things like missing fields, tickers we don't track, weirdly long text, old or future-dated articles, and days where we got way fewer articles than usual. More details in [docs/pipeline.md](docs/pipeline.md#data-validation).
+**Validate** (`scripts/tfdv_validate.py`) checks one day of raw data against a saved schema using TFDV. It catches things like missing fields, tickers we don't track, weirdly long text, old or future-dated articles, and days where we got way fewer articles than usual. More details in [docs/PIPELINE.md](docs/PIPELINE.md#data-validation).
 
 **Preprocess** (`scripts/preprocess.py`) takes all the raw data and turns it into `data/processed/news.parquet`. It maps the two APIs' different formats to the same columns, strips HTML, converts timestamps to UTC, fixes ticker variants (`MSFT.MI` becomes `MSFT`, `GOOG` becomes `GOOGL`), drops non-English articles, and removes duplicate headlines (keeping the earliest one). Each row is one article for one ticker, so an article about both Apple and Nvidia shows up twice.
 
@@ -45,17 +45,17 @@ flowchart LR
 
 | Page | What's in it |
 |---|---|
-| [docs/setup.md](docs/setup.md) | what you need, supported platforms, `.env` settings, keeping the computer awake, Airflow commands, how the Docker setup works, running each script by hand |
-| [docs/pipeline.md](docs/pipeline.md) | DAG schedules and why, why each run fetches 6 hours late, every validation check, the schema baseline, alerts |
-| [docs/dvc_guide.md](docs/dvc_guide.md) | DVC setup with our GCS bucket, everyday commands, troubleshooting |
-| [docs/submission_checklist.md](docs/submission_checklist.md) | where each point of the course rubric is covered |
+| [docs/SETUP.md](docs/SETUP.md) | what you need, supported platforms, `.env` settings, keeping the computer awake, Airflow commands, how the Docker setup works, running each script by hand |
+| [docs/PIPELINE.md](docs/PIPELINE.md) | DAG schedules and why, why each run fetches 6 hours late, every validation check, the schema baseline, alerts |
+| [docs/DVC_GUIDE.md](docs/DVC_GUIDE.md) | DVC setup with our GCS bucket, everyday commands, troubleshooting |
+| [docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md) | where each point of the course rubric is covered |
 
 ## Quick start (Airflow)
 
 You need Docker with Compose, `make`, and free API keys for [Finnhub](https://finnhub.io/register) and [Marketaux](https://www.marketaux.com/register). For running the scripts and tests outside Docker you also need [uv](https://docs.astral.sh/uv/getting-started/installation/).
 
 > [!WARNING]
-> Not every machine can install TFDV. Linux x86_64 and Windows with WSL2 work; Apple Silicon Macs probably can't build the Docker image. Check [supported platforms](docs/setup.md#supported-platforms) first.
+> Not every machine can install TFDV. Linux x86_64 and Windows with WSL2 work; Apple Silicon Macs probably can't build the Docker image. Check [supported platforms](docs/SETUP.md#supported-platforms) first.
 
 **1. Clone the repo and make your `.env`** (this won't touch an existing one):
 
@@ -72,7 +72,7 @@ MARKETAUX_API_KEY=your_marketaux_api_key
 FINNHUB_API_KEY=your_finnhub_api_key
 ```
 
-The Gmail settings in there are optional, they're only for alert emails (see [setup.md](docs/setup.md#the-env-file)).
+The Gmail settings in there are optional, they're only for alert emails (see [SETUP.md](docs/SETUP.md#the-env-file)).
 
 > [!CAUTION]
 > `.env` holds your real keys. It's in `.gitignore`, so never force-add it or paste its contents anywhere.
@@ -97,7 +97,7 @@ docker compose exec airflow-scheduler bash -c 'for d in ingest_finnhub ingest_ma
 The ingest DAGs start collecting into `data/raw/`, and `process_news` validates and cleans each day at 06:30 UTC the next morning. The schema is already in the repo (`data/schema/schema.pbtxt`), so there's nothing to set up for validation.
 
 > [!IMPORTANT]
-> Airflow only runs while your computer is on and awake, so keep it awake (and plugged in), especially around 06:00 to 06:30 UTC when each day gets finished and processed. See [keeping the computer awake](docs/setup.md#keeping-the-computer-awake).
+> Airflow only runs while your computer is on and awake, so keep it awake (and plugged in), especially around 06:00 to 06:30 UTC when each day gets finished and processed. See [keeping the computer awake](docs/SETUP.md#keeping-the-computer-awake).
 
 **5. Stop Airflow** whenever you want (run history is kept):
 
@@ -111,7 +111,7 @@ make down
 > [!NOTE]
 > `make up` runs the containers as your own user, otherwise on Linux the files Airflow writes into the repo would end up owned by someone else. If you don't have `make`, use `AIRFLOW_UID=$(id -u) docker compose up -d --build` instead.
 
-More commands (triggering a DAG, running one day by hand, running the scripts without Airflow) are in [docs/setup.md](docs/setup.md#useful-airflow-commands).
+More commands (triggering a DAG, running one day by hand, running the scripts without Airflow) are in [docs/SETUP.md](docs/SETUP.md#useful-airflow-commands).
 
 ## The DAGs
 
@@ -121,15 +121,15 @@ More commands (triggering a DAG, running one day by hand, running the scripts wi
 | `ingest_marketaux` | every 6 hours | fetches one 6-hour window of Marketaux news, 6 hours late |
 | `process_news` | daily at 06:30 | validates the previous day with TFDV, then rebuilds `news.parquet` |
 
-Each run fetches its own time window, so runs never overlap and there are no gaps, and missed windows are caught up when Airflow comes back. Preprocessing only runs if validation passes. The schedule maths, the retries and why each run is 6 hours late are in [docs/pipeline.md](docs/pipeline.md#the-dags).
+Each run fetches its own time window, so runs never overlap and there are no gaps, and missed windows are caught up when Airflow comes back. Preprocessing only runs if validation passes. The schedule maths, the retries and why each run is 6 hours late are in [docs/PIPELINE.md](docs/PIPELINE.md#the-dags).
 
 ## Data validation
 
-Every day is checked with TFDV against the schema in `data/schema/schema.pbtxt` (built from two weeks of real data) and compared with the same weekday a week earlier. It catches missing fields, tickers we don't track, outliers, old or future-dated articles, non-English articles, drift in the ticker mix, too few or too many articles, a missing source or ticker, and duplicate spikes. Each day's stats, anomalies and an HTML stats page go to `data/validation/YYYY/MM/DD/`. The full list of checks is in [docs/pipeline.md](docs/pipeline.md#data-validation).
+Every day is checked with TFDV against the schema in `data/schema/schema.pbtxt` (built from two weeks of real data) and compared with the same weekday a week earlier. It catches missing fields, tickers we don't track, outliers, old or future-dated articles, non-English articles, drift in the ticker mix, too few or too many articles, a missing source or ticker, and duplicate spikes. Each day's stats, anomalies and an HTML stats page go to `data/validation/YYYY/MM/DD/`. The full list of checks is in [docs/PIPELINE.md](docs/PIPELINE.md#data-validation).
 
 ## Alerts
 
-When validation finds anomalies or any Airflow task fails after its retries, the team gets an email (through Gmail, set up in `.env`). Failing tests in CI send their own email. What each email contains is in [docs/pipeline.md](docs/pipeline.md#alerts).
+When validation finds anomalies or any Airflow task fails after its retries, the team gets an email (through Gmail, set up in `.env`). Failing tests in CI send their own email. What each email contains is in [docs/PIPELINE.md](docs/PIPELINE.md#alerts).
 
 ## Data versioning (DVC)
 
@@ -139,7 +139,7 @@ make snapshot
 git push
 ```
 
-The data is stored in a Google Cloud Storage bucket (`gs://finmlops-pipeline-dvc`) in our teammate Kshitij's personal Google Cloud account, since the Google Cloud access from our university accounts came with too many restrictions. If you have access, `uv run dvc pull` gets you every version we've snapshotted. See [docs/dvc_guide.md](docs/dvc_guide.md) for setup, everyday commands and troubleshooting.
+The data is stored in a Google Cloud Storage bucket (`gs://finmlops-pipeline-dvc`) in our teammate Kshitij's personal Google Cloud account, since the Google Cloud access from our university accounts came with too many restrictions. If you have access, `uv run dvc pull` gets you every version we've snapshotted. See [docs/DVC_GUIDE.md](docs/DVC_GUIDE.md) for setup, everyday commands and troubleshooting.
 
 ## Tests
 
@@ -167,10 +167,10 @@ finmlops-data-pipeline/
 │   ├── schema/               # TFDV schema (in git)
 │   └── validation/           # TFDV stats and reports by date (not in git)
 ├── docs/
-│   ├── setup.md              # setup details and running things by hand
-│   ├── pipeline.md           # schedules, validation checks and alerts in detail
-│   ├── dvc_guide.md          # DVC setup (GCS bucket) and commands
-│   └── submission_checklist.md # where each rubric point is covered in the repo
+│   ├── SETUP.md              # setup details and running things by hand
+│   ├── PIPELINE.md           # schedules, validation checks and alerts in detail
+│   ├── DVC_GUIDE.md          # DVC setup (GCS bucket) and commands
+│   └── SUBMISSION_CHECKLIST.md # where each rubric point is covered in the repo
 ├── logs/                     # Airflow task logs (not in git)
 ├── scripts/
 │   ├── config.py             # the tickers we track

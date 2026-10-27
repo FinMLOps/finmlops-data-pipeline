@@ -10,7 +10,7 @@ up:  # build and start Airflow; UI at http://localhost:8080
 down:  # stop Airflow (data in Postgres is kept)
 	docker compose down
 
-snapshot:  # version the current data with DVC, push it, and commit the pointer files (see docs/dvc_guide.md)
+snapshot:  # version the current data with DVC, push it, and commit the pointer files (see docs/DVC_GUIDE.md)
 	uv run dvc add data/raw
 	uv run dvc repro
 	uv run dvc push

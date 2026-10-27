@@ -79,7 +79,7 @@ We have three DAGs:
 | The exact data versions from the last run | `dvc.lock` |
 | Shared DVC settings | `.dvc/config` |
 | One command to take a snapshot (`dvc add` → `dvc repro` → `dvc push` → commit the pointer files) | `make snapshot` in the `Makefile` |
-| How to set it up and use it | `docs/dvc_guide.md` |
+| How to set it up and use it | `docs/DVC_GUIDE.md` |
 
 > [!NOTE]
 > Our DVC remote is a Google Cloud Storage bucket (`gs://finmlops-pipeline-dvc/dvc`) in our teammate Kshitij's personal Google Cloud account, so everyone on the team can push and pull the same data. We went with a personal account because the Google Cloud access from our university accounts came with a lot of settings and restrictions. Before we had the bucket we used a local folder as the remote.
@@ -197,7 +197,7 @@ Apart from that, we couldn't find a kind of bias that would actually apply unles
 | Guideline | Where |
 |---|---|
 | Folder structure | `dags/`, `data/`, `scripts/`, `tests/`, `logs/`, `dvc.yaml` and `README.md` (the README has the full tree under "Project structure") |
-| README | `README.md` covers setup, running the pipeline, how the code is organized, DVC and reproducibility, with the details in `docs/setup.md` (setup, platforms, running things by hand) and `docs/pipeline.md` (schedules, validation checks, alerts) |
+| README | `README.md` covers setup, running the pipeline, how the code is organized, DVC and reproducibility, with the details in `docs/SETUP.md` (setup, platforms, running things by hand) and `docs/PIPELINE.md` (schedules, validation checks, alerts) |
 | Reproducibility | a fixed Python version (`.python-version`), locked dependencies (`uv.lock`), Docker for Airflow, `.env.example`, the schema in git and DVC for the data |
 | Code style | small functions that each do one thing, one file per API, shared code in `scripts/helpers/` |
 | Error handling | retries with backoff for 429/5xx, one source or ticker failing doesn't stop the rest, a missing API key just skips that source, broken raw lines are skipped and counted, raw files are never overwritten, a broken alert never hides the real error, and Airflow retries failed tasks |

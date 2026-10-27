@@ -88,7 +88,7 @@ Look over the diff and commit it. If there's no schema at all, the first validat
 
 ## Alerts
 
-`scripts/alert_utils.py` sends alert emails through Gmail (set up in `.env`, see [setup.md](setup.md#the-env-file)) when:
+`scripts/alert_utils.py` sends alert emails through Gmail (set up in `.env`, see [SETUP.md](SETUP.md#the-env-file)) when:
 - TFDV validation finds anomalies or there's no raw data for the day
 - any Airflow task fails after all its retries
 
