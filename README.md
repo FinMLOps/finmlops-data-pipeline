@@ -164,6 +164,7 @@ finmlops-data-pipeline/
 ├── data/
 │   ├── raw/                  # raw API responses by date (not in git)
 │   ├── processed/            # news.parquet (not in git)
+│   ├── samples/              # small samples of raw, processed and validation data (in git)
 │   ├── schema/               # TFDV schema (in git)
 │   └── validation/           # TFDV stats and reports by date (not in git)
 ├── docs/

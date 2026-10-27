@@ -23,6 +23,12 @@ We get our news from two free APIs, Finnhub and Marketaux, for the 7 tickers we 
 
 To keep it reproducible, every run fetches one exact time window (`--since` and `--until`), so running the same window again gets the same articles. Raw files are also never overwritten.
 
+> [!NOTE]
+> In our scope document we said the raw data would be stored as JSON. We ended up using **JSONL** (JSON Lines) for raw data: it's still JSON exactly as the APIs send it, just one item per line. That way every run can write its own file without loading anything first, and if one line is broken we only lose that one item instead of the whole file (`load_raw()` skips and logs bad lines). The cleaned data is **Parquet**, which keeps the column types (timestamps stay timestamps), is much smaller than JSON, and loads straight into pandas.
+
+> [!TIP]
+> Small samples of the raw JSONL, the cleaned Parquet (plus a CSV copy that GitHub shows as a table) and a validation report are in [`data/samples/`](../data/samples/), so you can see the data at each step without pulling it with DVC.
+
 ### 2.2 Data preprocessing
 
 Since we get our data from APIs and don't collect it by hand, it already comes in pretty clean, so we had very little cleaning to do. We still wrote a preprocessing step to strip HTML tags, decode HTML entities (like `&amp;` → `&`) and collapse extra whitespace, just to be safe. When we ran it on all our raw data so far, it only changed 6 out of 297 records (2%), and all 6 were HTML entities. There were no HTML tags, no messy whitespace, no empty titles, and every article was already in English.
@@ -204,7 +210,22 @@ Apart from that, we couldn't find a kind of bias that would actually apply unles
 
 ## What comes next: the model
 
-This repo stops at a clean, validated and versioned `news.parquet`. The model work happens in our [finmlops-model](https://github.com/FinMLOps/finmlops-model) repo, which pulls a specific version of the data with DVC. Here's the plan:
+This repo stops at a clean, validated and versioned `news.parquet`. The model work happens in our [finmlops-model](https://github.com/FinMLOps/finmlops-model) repo, which pulls a specific version of the data with DVC.
+
+### Scaling down the scope: sentiment, not stock price movement
+
+In our scope document we said that, on top of scoring each article as positive, neutral or negative, we'd also check whether the sentiment matched how the stock moved after the news came out. After working with the actual data for a while, we decided to drop that part and just focus on sentiment.
+
+The main reason is the same ambiguous financial language we talked about in the bias section. If an article says "revenue grew but missed estimates", it's already hard to say whether that's good or bad news, and it's even harder to say what the stock will do with it. Sometimes a stock drops on good news because people expected even better, and sometimes it barely moves because everyone already knew. So figuring out if an article is positive is one problem, but figuring out how the market reacts to it is a much bigger one.
+
+Also, even big trading firms with paid data feeds, way faster access to news and whole research teams can't predict short-term price moves very accurately. We're using free APIs for a class project, so it didn't seem realistic for us to try.
+
+And the project is due on 7 December. We'd rather do the sentiment part properly (good labels, a real evaluation and safe deployment) than try to do both and not finish either one well.
+
+So for this project, the model only classifies the sentiment of financial news, and that's what we'll evaluate it on. Comparing sentiment with price moves could be something to try later, but we're not promising it here.
+
+### The plan
+
 
 1. **Get labels.** FinBERT sorts text into positive, neutral or negative, so we need articles with those labels. We have two ways to get them:
    - **Hand-label Finnhub articles.** Finnhub doesn't give any sentiment, so we take a sample of its articles (the same number from each ticker) and label them ourselves as positive, neutral or negative.
