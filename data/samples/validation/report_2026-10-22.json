@@ -1,0 +1,29 @@
+{
+  "day": "2026-10-22",
+  "files": [
+    "/home/aayamlord/GitHub/finmlops-data-pipeline/data/raw/2026/10/22/finnhub_175931_017782.jsonl",
+    "/home/aayamlord/GitHub/finmlops-data-pipeline/data/raw/2026/10/22/marketaux_175932_718951.jsonl"
+  ],
+  "n_records": 671,
+  "corrupt_lines": 0,
+  "anomalies": {},
+  "counts": {
+    "source": {
+      "finnhub": 620,
+      "marketaux": 51
+    },
+    "ticker": {
+      "AAPL": 47,
+      "MSFT": 79,
+      "NVDA": 99,
+      "GOOGL": 105,
+      "META": 140,
+      "AMZN": 85,
+      "TSLA": 186
+    },
+    "duplicate_rate": {
+      "finnhub": 0.231,
+      "marketaux": 0.275
+    }
+  }
+}
