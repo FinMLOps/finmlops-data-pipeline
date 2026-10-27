@@ -1,6 +1,7 @@
 """Unit tests for the ingestion runner and HTTP retries."""
 
 import json
+import logging
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -144,6 +145,21 @@ def test_main_passes_cli_options_to_run(monkeypatch):
 
 
 # with no options it should behave like before: all tickers, both sources, default window
+def test_main_keeps_api_keys_out_of_logs(monkeypatch, caplog):
+    monkeypatch.setenv("FINNHUB_API_KEY", "secret-key-123456")
+    monkeypatch.setattr(ingest, "write_raw", lambda *args, **kwargs: [])
+    monkeypatch.setattr(logging.getLogger("httpx"), "filters", [])  # as before main() runs
+    caplog.set_level(logging.INFO)
+
+    with respx.mock:
+        respx.get(FinnhubSource.URL).respond(json=[])
+        ingest.main(["AAPL", "--source", "finnhub"])
+
+    assert "secret-key-123456" not in caplog.text  # httpx logs full request URLs at INFO
+    assert "token=[REDACTED]" in caplog.text  # the request line is kept, just without the key
+    assert "finnhub [AAPL]: 0 items" in caplog.text  # our own logs still show up
+
+
 def test_main_defaults(monkeypatch):
     calls = []
     monkeypatch.setattr(ingest, "run", lambda *args: calls.append(args) or [])
