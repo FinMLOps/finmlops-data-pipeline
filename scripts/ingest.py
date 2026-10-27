@@ -4,6 +4,7 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 from datetime import timedelta
 from pathlib import Path
 
@@ -12,12 +13,27 @@ import httpx
 from scripts.config import TICKERS
 from scripts.fetch_finnhub import FinnhubSource
 from scripts.fetch_marketaux import MarketauxSource
-from scripts.helpers import SourceError, parse_dt, utcnow
+from scripts.helpers import SourceError, parse_dt, redact, utcnow
 
 log = logging.getLogger(__name__)
 
 RAW_DIR = Path(__file__).resolve().parent.parent / "data" / "raw"
 SOURCES = {"finnhub": FinnhubSource, "marketaux": MarketauxSource}
+
+
+class RedactKeys(logging.Filter):
+    """Replace the API keys in httpx's request lines (both APIs put the key in the URL)."""
+
+    def __init__(self, keys):
+        super().__init__()
+        self.keys = [k for k in keys if k]
+
+    def filter(self, record):
+        message = record.getMessage()
+        for key in self.keys:
+            message = redact(message, key)
+        record.msg, record.args = message, None
+        return True
 
 
 async def fetch_all(sources, tickers, since, until):
@@ -100,6 +116,8 @@ def main(argv=None):
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s"
     )
+    keys = [os.environ.get(source.env_key) for source in SOURCES.values()]
+    logging.getLogger("httpx").addFilter(RedactKeys(keys))  # its request lines show full URLs, keys included
     for path in run(args.tickers, args.since, args.until, args.source or SOURCES):
         print(path)
 
