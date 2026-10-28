@@ -31,7 +31,7 @@ To keep it reproducible, every run fetches one exact time window (`--since` and 
 
 ### 2.2 Data preprocessing
 
-Since we get our data from APIs and don't collect it by hand, it already comes in pretty clean, so we had very little cleaning to do. We still wrote a preprocessing step to strip HTML tags, decode HTML entities (like `&amp;` → `&`) and collapse extra whitespace, just to be safe. When we ran it on all our raw data so far, it only changed 6 out of 297 records (2%), and all 6 were HTML entities. There were no HTML tags, no messy whitespace, no empty titles, and every article was already in English.
+Since we get our data from APIs and don't collect it by hand, it already comes in pretty clean, so we had very little cleaning to do. We still wrote a preprocessing step to strip HTML tags, decode HTML entities (like `&amp;` → `&`) and collapse extra whitespace, just to be safe. When we ran it on all our raw data so far (12,014 records from 1 to 26 Oct), it only changed 669 of them (5.6%): 339 had HTML entities and 357 had extra whitespace (a few had both). There were no HTML tags at all, no empty titles, and every article was already in English.
 
 Most of the actual work in preprocessing is getting both APIs into the same format and deciding what one row means. Everything is in `scripts/preprocess.py`:
 
@@ -48,13 +48,13 @@ If we ever add another API, we only need to write one new `*_row()` function and
 
 ### 2.3 Test modules
 
-We have 75 tests using pytest. None of them call the real APIs or send real emails (we mock those with `respx` and a fake SMTP server), so they're free to run as often as we want. GitHub Actions runs them on every push and PR to `main` (`.github/workflows/pytest.yml`).
+We have 76 tests using pytest. None of them call the real APIs or send real emails (we mock those with `respx` and a fake SMTP server), so they're free to run as often as we want. GitHub Actions runs them on every push and PR to `main` (`.github/workflows/pytest.yml`).
 
 | File | Tests | What they check |
 |---|---|---|
 | `tests/test_preprocess.py` | 12 | mapping fields for each API, HTML cleanup, standardizing tickers, dropping bad records, one row per ticker, keeping the earliest duplicate, broken raw lines, our old raw format, no raw data at all |
 | `tests/test_tfdv_validate.py` | 29 | building the schema from several days, comparing with the same weekday, schema domains, bad values, unknown tickers or sources, outliers, stale and future articles, ticker drift, too few or too many articles, a missing source or ticker, one source dropping by half, duplicate spikes, non-English articles, corrupt lines, a missing day |
-| `tests/test_ingest.py` | 10 | saving raw data as received, one source failing while the other still works, missing API keys, every request failing, never overwriting files, retrying 5xx but not 4xx, CLI options, date folders |
+| `tests/test_ingest.py` | 11 | saving raw data as received, keeping API keys out of the logs, one source failing while the other still works, missing API keys, every request failing, never overwriting files, retrying 5xx but not 4xx, CLI options, date folders |
 | `tests/test_schemas.py` | 9 | parsing timestamps and converting them to UTC, IDs, the article data classes |
 | `tests/test_finnhub.py` | 5 | missing key, a normal fetch, HTTP errors, invalid JSON, window boundaries |
 | `tests/test_marketaux.py` | 5 | missing key, a normal fetch, pagination, HTTP errors, keeping earlier pages when a later page fails |
@@ -95,6 +95,27 @@ We have three DAGs:
 - All our scripts use Python's `logging` (`ingest.py`, `fetch_marketaux.py`, `helpers/base.py`, `preprocess.py`, `tfdv_validate.py`, `alert_utils.py`). They log how many articles came in per source and ticker, retries, skipped records, files written and any anomalies.
 - Airflow saves a log for every task attempt in `logs/`, and you can read them in the UI.
 - When something fails, the team gets an email (see 2.8).
+- The API keys are in the request URLs, so a logging filter in `ingest.py` replaces them with `[REDACTED]` before anything is written to the logs.
+
+Both APIs put the key right in the request URL, and at first those URLs went into the task logs as they were:
+
+![Task log with the API key in the request URLs](assets/logs_before_redaction.png)
+
+*An `ingest_marketaux` log from before the fix: every request line ended with `api_token=` and our key (blacked out here).*
+
+So we added a filter that replaces the keys before the line is written. The request lines are still there, with the status and timing we use for debugging, just without the key:
+
+![Task log with the API key redacted](assets/logs_after_redaction.png)
+
+*The same kind of log after the fix: `api_token=[REDACTED]` (circled).*
+
+You can see these logs in some of our screenshots:
+- **The `ingest_finnhub` screenshot in [2.9](#29-pipeline-flow-optimization)** shows a task log in the Airflow UI: the command Airflow ran, one line per request, one `finnhub [TICKER]: N items` line per ticker, the `wrote 6 items to ...` line with the file it saved, and the exit code.
+- **The Gantt chart screenshot in [2.9](#29-pipeline-flow-optimization)** shows the `ingest_marketaux` log next to it. The timestamps on each request line are how we worked out that Marketaux takes 13 to 35 seconds to answer.
+- **The screenshot in [docs/PIPELINE.md](PIPELINE.md#why-each-run-fetches-6-hours-late)** shows a Finnhub log where every ticker came back with `0 items`, which is how we noticed the hourly runs were missing articles.
+- **The Airflow alert email in [2.8](#28-anomaly-detection-and-alerts)** includes the last lines of the failed task's log, so the log gets to the team even when they aren't looking at Airflow.
+
+These screenshots were taken before we added the redaction, but the URLs are cut off before the key, so no key is visible in them.
 
 ### 2.7 Data schema and statistics generation
 
@@ -132,6 +153,18 @@ A few things it shows:
 | Duplicates | more than 60% of a source's articles repeating a URL |
 
 If anything is found, `tfdv_validate` raises an error. The Airflow task fails, `process_news` stops before preprocessing, and `scripts/alert_utils.py` emails the team through Gmail. Any Airflow task that fails also sends an email with the DAG, task, time window, error and the last lines of its output (`airflow_failure_callback`). Failing tests in CI send their own email too (`.github/workflows/pytest.yml`).
+
+To check that the alerts actually arrive, we made one task fail on purpose in each place. For Airflow, a temporary DAG whose only task prints a line and exits with an error:
+
+![Airflow failure alert email](assets/airflow_failure_email.png)
+
+*The Airflow alert, from "FinMLOps Airflow": which DAG and task failed, the run, the error, and the last lines the task printed, so you can usually see what went wrong without opening Airflow. The log link only opens on the machine running Airflow.*
+
+For CI, a pull request that added a test that always fails (we closed it without merging):
+
+![CI failure alert email](assets/ci_failure_email.png)
+
+*The CI alert from GitHub Actions: the branch, the pull request, the commit, and a link to the failed run.*
 
 ### 2.9 Pipeline flow optimization
 
@@ -225,7 +258,6 @@ And the project is due on 7 December. We'd rather do the sentiment part properly
 So for this project, the model only classifies the sentiment of financial news, and that's what we'll evaluate it on. Comparing sentiment with price moves could be something to try later, but we're not promising it here.
 
 ### The plan
-
 
 1. **Get labels.** FinBERT sorts text into positive, neutral or negative, so we need articles with those labels. We have two ways to get them:
    - **Hand-label Finnhub articles.** Finnhub doesn't give any sentiment, so we take a sample of its articles (the same number from each ticker) and label them ourselves as positive, neutral or negative.
