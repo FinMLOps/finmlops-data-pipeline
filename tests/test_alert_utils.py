@@ -104,3 +104,8 @@ def test_failure_callback_without_log_file(monkeypatch, tmp_path):
     alerts.airflow_failure_callback({"ti": FakeTI(), "run_id": "r", "exception": None})
 
     assert "(task log not found)" in FakeSMTP.sent[0].get_content()
+
+
+def test_deliberate_ci_failure():
+    assert False, "deliberate failure to check the CI alert email"
+
