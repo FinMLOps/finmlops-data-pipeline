@@ -183,7 +183,7 @@ finmlops-data-pipeline/
 │   ├── fetch_marketaux.py    # Marketaux API
 │   └── helpers/
 │       ├── base.py           # shared API code (keys, retries, hiding keys in logs)
-│       └── schemas.py        # data classes and date parsing
+│       └── schemas.py        # timestamp parsing and ids
 ├── tests/                    # one test file per script
 ├── Dockerfile                # Airflow image with our dependencies
 ├── docker-compose.yaml       # local Airflow setup
