@@ -21,10 +21,10 @@ The only picky dependency is TFDV, which only publishes packages for Linux on x8
 | Mac, Intel | works | TFDV won't install |
 | Mac, Apple Silicon (M1 to M4) | probably won't build (no TFDV package for Linux arm64), untested | works |
 
-Everything except `tfdv_validate.py` works anywhere.
+Everything except [`tfdv_validate.py`](../scripts/tfdv_validate.py) works anywhere.
 
 > [!WARNING]
-> On an Apple Silicon Mac, `make up` will probably fail while installing TFDV. Try adding `platform: linux/amd64` under `x-airflow-common` in `docker-compose.yaml`. It builds the x86_64 image under emulation, which is slow and might not run TensorFlow, so let us know how it goes.
+> On an Apple Silicon Mac, `make up` will probably fail while installing TFDV. Try adding `platform: linux/amd64` under `x-airflow-common` in [`docker-compose.yaml`](../docker-compose.yaml). It builds the x86_64 image under emulation, which is slow and might not run TensorFlow, so let us know how it goes.
 
 ## The `.env` file
 
@@ -77,13 +77,13 @@ docker compose exec airflow-scheduler airflow dags reserialize
 docker compose ps
 ```
 
-Task logs are in the UI (click a run, then a task) and also in `logs/`. The UI shows times in your local time zone; the DAGs are scheduled in UTC.
+Task logs are in the UI (click a run, then a task) and also in [`logs/`](../logs/). The UI shows times in your local time zone; the DAGs are scheduled in UTC.
 
 ## How the Docker setup works
 
-- **`Dockerfile`**: we don't use the official Airflow image. It's based on an older Debian, and TFDV 1.21 won't install on it, so we install Airflow on top of `python:3.11-slim-trixie` instead. It's a two-stage build: the first stage builds the pipeline's Python environment (`/opt/venv`, from `uv.lock`) with a compiler, and the final image only copies the result. The pipeline scripts run with that environment, separate from Airflow's, so TFDV and TensorFlow can't mess with Airflow's packages. Downloads are kept in Docker's build cache, so rebuilding after a dependency change takes about a minute instead of three.
-- **`docker-compose.yaml`**: Postgres, the scheduler, the API server (the UI), and the DAG processor. The repo is mounted into the containers, so DAGs read and write the real `data/` folder, and `.env` is passed to all of them. Postgres is only there for Airflow's own bookkeeping (DAG runs, task status, history). Our data doesn't go in it.
-- **`Makefile`**: `make up`, `make down` and `make snapshot`.
+- **[`Dockerfile`](../Dockerfile)**: we don't use the official Airflow image. It's based on an older Debian, and TFDV 1.21 won't install on it, so we install Airflow on top of `python:3.11-slim-trixie` instead. It's a two-stage build: the first stage builds the pipeline's Python environment (`/opt/venv`, from [`uv.lock`](../uv.lock)) with a compiler, and the final image only copies the result. The pipeline scripts run with that environment, separate from Airflow's, so TFDV and TensorFlow can't mess with Airflow's packages. Downloads are kept in Docker's build cache, so rebuilding after a dependency change takes about a minute instead of three.
+- **[`docker-compose.yaml`](../docker-compose.yaml)**: Postgres, the scheduler, the API server (the UI), and the DAG processor. The repo is mounted into the containers, so DAGs read and write the real [`data/`](../data/) folder, and `.env` is passed to all of them. Postgres is only there for Airflow's own bookkeeping (DAG runs, task status, history). Our data doesn't go in it.
+- **[`Makefile`](../Makefile)**: `make up`, `make down` and `make snapshot`.
 
 > [!NOTE]
 > The image is about 4 GB, almost all of it TensorFlow.

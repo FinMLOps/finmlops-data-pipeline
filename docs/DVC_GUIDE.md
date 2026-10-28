@@ -1,15 +1,15 @@
 # DVC guide
 
-We use [DVC](https://dvc.org) to version our data. Git keeps small pointer files (`data/raw.dvc`, `dvc.lock`), and DVC keeps the actual data in a cache and a remote. Every Git commit points at an exact version of the data, so we can always get back the data a result was built from.
+We use [DVC](https://dvc.org) to version our data. Git keeps small pointer files ([`data/raw.dvc`](../data/raw.dvc), [`dvc.lock`](../dvc.lock)), and DVC keeps the actual data in a cache and a remote. Every Git commit points at an exact version of the data, so we can always get back the data a result was built from.
 
 ## What's tracked
 
 | File | What it is |
 |---|---|
-| `data/raw.dvc` | fingerprint of everything in `data/raw/` (all the raw API files) |
-| `dvc.yaml` | the `preprocess` stage: reads `data/raw/`, `scripts/preprocess.py`, `scripts/config.py`, writes `data/processed/news.parquet` |
-| `dvc.lock` | exact fingerprints of that stage's inputs and output the last time it ran |
-| `.dvc/config` | shared DVC settings (committed) |
+| [`data/raw.dvc`](../data/raw.dvc) | fingerprint of everything in `data/raw/` (all the raw API files) |
+| [`dvc.yaml`](../dvc.yaml) | the `preprocess` stage: reads `data/raw/`, [`scripts/preprocess.py`](../scripts/preprocess.py), [`scripts/config.py`](../scripts/config.py), writes `data/processed/news.parquet` |
+| [`dvc.lock`](../dvc.lock) | exact fingerprints of that stage's inputs and output the last time it ran |
+| [`.dvc/config`](../.dvc/config) | shared DVC settings (committed) |
 | `.dvc/config.local` | your own settings, like where your local remote lives (not committed) |
 
 > [!NOTE]
@@ -66,7 +66,7 @@ Our DVC remote is a Google Cloud Storage bucket in our teammate Kshitij's person
 | | |
 |---|---|
 | Bucket | `finmlops-pipeline-dvc` (project `finmlops-pipeline`, region `us-east1`) |
-| DVC remote | `gcs` → `gs://finmlops-pipeline-dvc/dvc`, already the default in `.dvc/config` |
+| DVC remote | `gcs` → `gs://finmlops-pipeline-dvc/dvc`, already the default in [`.dvc/config`](../.dvc/config) |
 | Access | Storage Object Admin on this bucket only, given to each of us by email |
 
 The remote is already set up in the repo, so you only need access and a login:

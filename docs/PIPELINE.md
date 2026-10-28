@@ -6,9 +6,9 @@ The [README](../README.md#how-it-works) has the overview. This page explains the
 
 | DAG | File | Schedule | What it does |
 |---|---|---|---|
-| `ingest_finnhub` | `dags/ingest_news_dag.py` | every hour | fetches one hour of Finnhub news, 6 hours late (the 12:00 run fetches 05:00 to 06:00) |
-| `ingest_marketaux` | `dags/ingest_news_dag.py` | every 6 hours (00, 06, 12, 18 UTC) | fetches one 6-hour window of Marketaux news, 6 hours late (the 12:00 run fetches 00:00 to 06:00) |
-| `process_news` | `dags/process_news_dag.py` | daily at 06:30 UTC | validates the previous day with TFDV, then rebuilds `news.parquet` |
+| `ingest_finnhub` | [`dags/ingest_news_dag.py`](../dags/ingest_news_dag.py) | every hour | fetches one hour of Finnhub news, 6 hours late (the 12:00 run fetches 05:00 to 06:00) |
+| `ingest_marketaux` | [`dags/ingest_news_dag.py`](../dags/ingest_news_dag.py) | every 6 hours (00, 06, 12, 18 UTC) | fetches one 6-hour window of Marketaux news, 6 hours late (the 12:00 run fetches 00:00 to 06:00) |
+| `process_news` | [`dags/process_news_dag.py`](../dags/process_news_dag.py) | daily at 06:30 UTC | validates the previous day with TFDV, then rebuilds `news.parquet` |
 
 - Each ingest run only fetches its own `[start, end)` time window, so runs never overlap and there are no gaps. An article published exactly at the end of a window belongs to the next one.
 - If the machine was off, `catchup` runs the missed windows when Airflow comes back.
@@ -52,7 +52,7 @@ Marketaux is the one that's limited. Every 6 hours uses at most 84 of the ~100 d
 
 ## Data validation
 
-`scripts/tfdv_validate.py` reads a day of raw files, turns each article into a few simple features, and checks them against the schema in `data/schema/schema.pbtxt`:
+[`scripts/tfdv_validate.py`](../scripts/tfdv_validate.py) reads a day of raw files, turns each article into a few simple features, and checks them against the schema in [`data/schema/schema.pbtxt`](../data/schema/schema.pbtxt):
 
 | Feature | What we check |
 |---|---|
@@ -88,7 +88,7 @@ Look over the diff and commit it. If there's no schema at all, the first validat
 
 ## Alerts
 
-`scripts/alert_utils.py` sends alert emails through Gmail (set up in `.env`, see [SETUP.md](SETUP.md#the-env-file)) when:
+[`scripts/alert_utils.py`](../scripts/alert_utils.py) sends alert emails through Gmail (set up in `.env`, see [SETUP.md](SETUP.md#the-env-file)) when:
 - TFDV validation finds anomalies or there's no raw data for the day
 - any Airflow task fails after all its retries
 
@@ -96,4 +96,4 @@ The Airflow failure email comes from "FinMLOps Airflow" and lists the DAG, task,
 
 If sending fails, that gets logged but the original error still comes through, so a broken alert never hides the real problem.
 
-Failing tests in CI send their own email from GitHub Actions (`.github/workflows/pytest.yml`), with the branch, pull request, commit and a link to the run.
+Failing tests in CI send their own email from GitHub Actions ([`.github/workflows/pytest.yml`](../.github/workflows/pytest.yml)), with the branch, pull request, commit and a link to the run.

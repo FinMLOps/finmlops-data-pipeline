@@ -13,13 +13,13 @@ We get our news from two free APIs, Finnhub and Marketaux, for the 7 tickers we 
 
 | What | Where |
 |---|---|
-| Getting news from Finnhub (one request per ticker) | `scripts/fetch_finnhub.py` |
-| Getting news from Marketaux (one request per ticker, up to 3 pages) | `scripts/fetch_marketaux.py` |
-| Code both APIs share: reading keys from `.env`, retrying with backoff on 429/5xx errors, hiding keys in logs | `scripts/helpers/base.py` |
-| Fetching all sources and tickers at the same time and saving the raw responses | `scripts/ingest.py` → `data/raw/YYYY/MM/DD/<source>_<time>.jsonl` |
-| The list of tickers | `scripts/config.py` |
-| Dependencies | `pyproject.toml` and `uv.lock` (we use uv, which pins exact versions like a `requirements.txt` would), plus the `Dockerfile` for Airflow |
-| Template for the API keys | `.env.example` |
+| Getting news from Finnhub (one request per ticker) | [`scripts/fetch_finnhub.py`](../scripts/fetch_finnhub.py) |
+| Getting news from Marketaux (one request per ticker, up to 3 pages) | [`scripts/fetch_marketaux.py`](../scripts/fetch_marketaux.py) |
+| Code both APIs share: reading keys from `.env`, retrying with backoff on 429/5xx errors, hiding keys in logs | [`scripts/helpers/base.py`](../scripts/helpers/base.py) |
+| Fetching all sources and tickers at the same time and saving the raw responses | [`scripts/ingest.py`](../scripts/ingest.py) → `data/raw/YYYY/MM/DD/<source>_<time>.jsonl` |
+| The list of tickers | [`scripts/config.py`](../scripts/config.py) |
+| Dependencies | [`pyproject.toml`](../pyproject.toml) and [`uv.lock`](../uv.lock) (we use uv, which pins exact versions like a `requirements.txt` would), plus the [`Dockerfile`](../Dockerfile) for Airflow |
+| Template for the API keys | [`.env.example`](../.env.example) |
 
 To keep it reproducible, every run fetches one exact time window (`--since` and `--until`), so running the same window again gets the same articles. Raw files are also never overwritten.
 
@@ -33,7 +33,7 @@ To keep it reproducible, every run fetches one exact time window (`--since` and 
 
 Since we get our data from APIs and don't collect it by hand, it already comes in pretty clean, so we had very little cleaning to do. We still wrote a preprocessing step to strip HTML tags, decode HTML entities (like `&amp;` → `&`) and collapse extra whitespace, just to be safe. When we ran it on all our raw data so far (12,014 records from 1 to 26 Oct), it only changed 669 of them (5.6%): 339 had HTML entities and 357 had extra whitespace (a few had both). There were no HTML tags at all, no empty titles, and every article was already in English.
 
-Most of the actual work in preprocessing is getting both APIs into the same format and deciding what one row means. Everything is in `scripts/preprocess.py`:
+Most of the actual work in preprocessing is getting both APIs into the same format and deciding what one row means. Everything is in [`scripts/preprocess.py`](../scripts/preprocess.py):
 
 | Step | Function |
 |---|---|
@@ -48,17 +48,17 @@ If we ever add another API, we only need to write one new `*_row()` function and
 
 ### 2.3 Test modules
 
-We have 76 tests using pytest. None of them call the real APIs or send real emails (we mock those with `respx` and a fake SMTP server), so they're free to run as often as we want. GitHub Actions runs them on every push and PR to `main` (`.github/workflows/pytest.yml`).
+We have 76 tests using pytest. None of them call the real APIs or send real emails (we mock those with `respx` and a fake SMTP server), so they're free to run as often as we want. GitHub Actions runs them on every push and PR to `main` ([`.github/workflows/pytest.yml`](../.github/workflows/pytest.yml)).
 
 | File | Tests | What they check |
 |---|---|---|
-| `tests/test_preprocess.py` | 12 | mapping fields for each API, HTML cleanup, standardizing tickers, dropping bad records, one row per ticker, keeping the earliest duplicate, broken raw lines, our old raw format, no raw data at all |
-| `tests/test_tfdv_validate.py` | 29 | building the schema from several days, comparing with the same weekday, schema domains, bad values, unknown tickers or sources, outliers, stale and future articles, ticker drift, too few or too many articles, a missing source or ticker, one source dropping by half, duplicate spikes, non-English articles, corrupt lines, a missing day |
-| `tests/test_ingest.py` | 11 | saving raw data as received, keeping API keys out of the logs, one source failing while the other still works, missing API keys, every request failing, never overwriting files, retrying 5xx but not 4xx, CLI options, date folders |
-| `tests/test_schemas.py` | 9 | parsing timestamps and converting them to UTC, IDs, the article data classes |
-| `tests/test_finnhub.py` | 5 | missing key, a normal fetch, HTTP errors, invalid JSON, window boundaries |
-| `tests/test_marketaux.py` | 5 | missing key, a normal fetch, pagination, HTTP errors, keeping earlier pages when a later page fails |
-| `tests/test_alert_utils.py` | 5 | email sent or skipped, a broken email never crashes anything, what the Airflow failure email contains (with and without the task log) |
+| [`tests/test_preprocess.py`](../tests/test_preprocess.py) | 12 | mapping fields for each API, HTML cleanup, standardizing tickers, dropping bad records, one row per ticker, keeping the earliest duplicate, broken raw lines, our old raw format, no raw data at all |
+| [`tests/test_tfdv_validate.py`](../tests/test_tfdv_validate.py) | 29 | building the schema from several days, comparing with the same weekday, schema domains, bad values, unknown tickers or sources, outliers, stale and future articles, ticker drift, too few or too many articles, a missing source or ticker, one source dropping by half, duplicate spikes, non-English articles, corrupt lines, a missing day |
+| [`tests/test_ingest.py`](../tests/test_ingest.py) | 11 | saving raw data as received, keeping API keys out of the logs, one source failing while the other still works, missing API keys, every request failing, never overwriting files, retrying 5xx but not 4xx, CLI options, date folders |
+| [`tests/test_schemas.py`](../tests/test_schemas.py) | 9 | parsing timestamps and converting them to UTC, IDs, the article data classes |
+| [`tests/test_finnhub.py`](../tests/test_finnhub.py) | 5 | missing key, a normal fetch, HTTP errors, invalid JSON, window boundaries |
+| [`tests/test_marketaux.py`](../tests/test_marketaux.py) | 5 | missing key, a normal fetch, pagination, HTTP errors, keeping earlier pages when a later page fails |
+| [`tests/test_alert_utils.py`](../tests/test_alert_utils.py) | 5 | email sent or skipped, a broken email never crashes anything, what the Airflow failure email contains (with and without the task log) |
 
 ### 2.4 Pipeline orchestration (Airflow DAGs)
 
@@ -66,36 +66,36 @@ We have three DAGs:
 
 | DAG | File | Runs (UTC) | Tasks |
 |---|---|---|---|
-| `ingest_finnhub` | `dags/ingest_news_dag.py` | every hour | `ingest`, which fetches one hour, 6 hours late |
-| `ingest_marketaux` | `dags/ingest_news_dag.py` | every 6 hours | `ingest`, which fetches one 6-hour window, 6 hours late |
-| `process_news` | `dags/process_news_dag.py` | every day at 06:30 | `tfdv_validate` >> `preprocess` |
+| `ingest_finnhub` | [`dags/ingest_news_dag.py`](../dags/ingest_news_dag.py) | every hour | `ingest`, which fetches one hour, 6 hours late |
+| `ingest_marketaux` | [`dags/ingest_news_dag.py`](../dags/ingest_news_dag.py) | every 6 hours | `ingest`, which fetches one 6-hour window, 6 hours late |
+| `process_news` | [`dags/process_news_dag.py`](../dags/process_news_dag.py) | every day at 06:30 | `tfdv_validate` >> `preprocess` |
 
 - Every run fetches a window that ended 6 hours earlier. When we compared the hourly runs with fetching the same hours again later, they had only gotten 26 of 338 articles (about 8%), because the APIs make new articles available a few hours after they're published. `process_news` runs at 06:30 so the day's last windows are in first.
 - Every run gets its own `[start, end)` time window from `CronDataIntervalTimetable`. With `catchup=True`, if the laptop running Airflow was asleep, Airflow goes back and runs the windows it missed.
 - `preprocess` only runs if validation passed, so bad data never makes it into `news.parquet`.
 - Ingest retries twice, 5 minutes apart. Validation doesn't retry, since bad data won't fix itself on a retry.
-- Airflow runs in Docker (`Dockerfile`, `docker-compose.yaml`), and `make up` / `make down` start and stop it.
+- Airflow runs in Docker ([`Dockerfile`](../Dockerfile), [`docker-compose.yaml`](../docker-compose.yaml)), and `make up` / `make down` start and stop it.
 
 ### 2.5 Data versioning with DVC
 
 | What | Where |
 |---|---|
-| Pointer to the raw data | `data/raw.dvc` |
-| The preprocess stage (its inputs, script and output) | `dvc.yaml` |
-| The exact data versions from the last run | `dvc.lock` |
-| Shared DVC settings | `.dvc/config` |
-| One command to take a snapshot (`dvc add` → `dvc repro` → `dvc push` → commit the pointer files) | `make snapshot` in the `Makefile` |
-| How to set it up and use it | `docs/DVC_GUIDE.md` |
+| Pointer to the raw data | [`data/raw.dvc`](../data/raw.dvc) |
+| The preprocess stage (its inputs, script and output) | [`dvc.yaml`](../dvc.yaml) |
+| The exact data versions from the last run | [`dvc.lock`](../dvc.lock) |
+| Shared DVC settings | [`.dvc/config`](../.dvc/config) |
+| One command to take a snapshot (`dvc add` → `dvc repro` → `dvc push` → commit the pointer files) | `make snapshot` in the [`Makefile`](../Makefile) |
+| How to set it up and use it | [`docs/DVC_GUIDE.md`](DVC_GUIDE.md) |
 
 > [!NOTE]
 > Our DVC remote is a Google Cloud Storage bucket (`gs://finmlops-pipeline-dvc/dvc`) in our teammate Kshitij's personal Google Cloud account, so everyone on the team can push and pull the same data. We went with a personal account because the Google Cloud access from our university accounts came with a lot of settings and restrictions. Before we had the bucket we used a local folder as the remote.
 
 ### 2.6 Tracking and logging
 
-- All our scripts use Python's `logging` (`ingest.py`, `fetch_marketaux.py`, `helpers/base.py`, `preprocess.py`, `tfdv_validate.py`, `alert_utils.py`). They log how many articles came in per source and ticker, retries, skipped records, files written and any anomalies.
-- Airflow saves a log for every task attempt in `logs/`, and you can read them in the UI.
+- All our scripts use Python's `logging` ([`ingest.py`](../scripts/ingest.py), [`fetch_marketaux.py`](../scripts/fetch_marketaux.py), [`helpers/base.py`](../scripts/helpers/base.py), [`preprocess.py`](../scripts/preprocess.py), [`tfdv_validate.py`](../scripts/tfdv_validate.py), [`alert_utils.py`](../scripts/alert_utils.py)). They log how many articles came in per source and ticker, retries, skipped records, files written and any anomalies.
+- Airflow saves a log for every task attempt in [`logs/`](../logs/), and you can read them in the UI.
 - When something fails, the team gets an email (see 2.8).
-- The API keys are in the request URLs, so a logging filter in `ingest.py` replaces them with `[REDACTED]` before anything is written to the logs.
+- The API keys are in the request URLs, so a logging filter in [`ingest.py`](../scripts/ingest.py) replaces them with `[REDACTED]` before anything is written to the logs.
 
 Both APIs put the key right in the request URL, and at first those URLs went into the task logs as they were:
 
@@ -119,9 +119,9 @@ These screenshots were taken before we added the redaction, but the URLs are cut
 
 ### 2.7 Data schema and statistics generation
 
-We used TFDV for this, in `scripts/tfdv_validate.py`. The `tfdv_validate` task runs it every day.
+We used TFDV for this, in [`scripts/tfdv_validate.py`](../scripts/tfdv_validate.py). The `tfdv_validate` task runs it every day.
 
-- **Schema:** `data/schema/schema.pbtxt`. We first made it from a single day (24 Oct 2026, 274 articles), but once we had a month of data that turned out to be too narrow: normal weekday articles with long summaries or lots of tickers got flagged as outliers. So we rebuilt it from two full weeks (12 to 23 Oct, 6,020 articles) with `--baseline 2026-10-12 2026-10-23` and committed it to git, so every later day gets checked against the same thing. `infer_schema()` adds allowed values, required fields and ranges on top of what TFDV infers.
+- **Schema:** [`data/schema/schema.pbtxt`](../data/schema/schema.pbtxt). We first made it from a single day (24 Oct 2026, 274 articles), but once we had a month of data that turned out to be too narrow: normal weekday articles with long summaries or lots of tickers got flagged as outliers. So we rebuilt it from two full weeks (12 to 23 Oct, 6,020 articles) with `--baseline 2026-10-12 2026-10-23` and committed it to git, so every later day gets checked against the same thing. `infer_schema()` adds allowed values, required fields and ranges on top of what TFDV infers.
 - **Statistics:** each day's stats, anomalies, a JSON report and an HTML stats page are saved to `data/validation/YYYY/MM/DD/`.
 - **Over time:** each day is compared with the same weekday a week earlier to catch drift (L-infinity distance for categories, Jensen-Shannon for numbers) and big changes in how many articles we got. We started by comparing with the day before, but after backfilling a month of data every Saturday got flagged for low volume and every Monday for a spike, since weekends only get about a third of the weekday news. Comparing Saturday with last Saturday got rid of those false alarms.
 
@@ -152,7 +152,7 @@ A few things it shows:
 | Coverage | a source or ticker with no articles at all, or one source dropping by half (`coverage_anomalies()`) |
 | Duplicates | more than 60% of a source's articles repeating a URL |
 
-If anything is found, `tfdv_validate` raises an error. The Airflow task fails, `process_news` stops before preprocessing, and `scripts/alert_utils.py` emails the team through Gmail. Any Airflow task that fails also sends an email with the DAG, task, time window, error and the last lines of its output (`airflow_failure_callback`). Failing tests in CI send their own email too (`.github/workflows/pytest.yml`).
+If anything is found, `tfdv_validate` raises an error. The Airflow task fails, `process_news` stops before preprocessing, and [`scripts/alert_utils.py`](../scripts/alert_utils.py) emails the team through Gmail. Any Airflow task that fails also sends an email with the DAG, task, time window, error and the last lines of its output (`airflow_failure_callback`). Failing tests in CI send their own email too ([`.github/workflows/pytest.yml`](../.github/workflows/pytest.yml)).
 
 To check that the alerts actually arrive, we made one task fail on purpose in each place. For Airflow, a temporary DAG whose only task prints a line and exits with an error:
 
@@ -189,7 +189,7 @@ What we found, timing every task:
 
 So the bottleneck is `ingest_marketaux`. The log in the Marketaux screenshot shows why: all 7 first-page requests went out at the same moment (12:00:13) and came back together at 12:00:36, so Marketaux itself takes 13 to 35 seconds to answer each request. Tickers with more news then need a second page, and a page can only be asked for after the previous one comes back (AAPL's and GOOGL's second pages came back at 12:01:01). It's the API, not our code: there were no retries or errors.
 
-This is also why we fetch all tickers at the same time (async `httpx` in `scripts/ingest.py`). Done one ticker after another, the same run would take 7 times the ~23 s wait just for the first pages, about 2 to 3 minutes, instead of about a minute.
+This is also why we fetch all tickers at the same time (async `httpx` in [`scripts/ingest.py`](../scripts/ingest.py)). Done one ticker after another, the same run would take 7 times the ~23 s wait just for the first pages, about 2 to 3 minutes, instead of about a minute.
 
 What we decided:
 - **Leave `ingest_marketaux` as it is.** It runs every 6 hours, so a minute is fine. We could ask for pages 2 and 3 at the same time as page 1, but that would spend requests on pages that might be empty, and Marketaux only gives us about 100 a day.
@@ -235,10 +235,10 @@ Apart from that, we couldn't find a kind of bias that would actually apply unles
 
 | Guideline | Where |
 |---|---|
-| Folder structure | `dags/`, `data/`, `scripts/`, `tests/`, `logs/`, `dvc.yaml` and `README.md` (the README has the full tree under "Project structure") |
-| README | `README.md` covers setup, running the pipeline, how the code is organized, DVC and reproducibility, with the details in `docs/SETUP.md` (setup, platforms, running things by hand) and `docs/PIPELINE.md` (schedules, validation checks, alerts) |
-| Reproducibility | a fixed Python version (`.python-version`), locked dependencies (`uv.lock`), Docker for Airflow, `.env.example`, the schema in git and DVC for the data |
-| Code style | small functions that each do one thing, one file per API, shared code in `scripts/helpers/` |
+| Folder structure | [`dags/`](../dags/), [`data/`](../data/), [`scripts/`](../scripts/), [`tests/`](../tests/), [`logs/`](../logs/), [`dvc.yaml`](../dvc.yaml) and [`README.md`](../README.md) (the README has the full tree under "Project structure") |
+| README | [`README.md`](../README.md) covers setup, running the pipeline, how the code is organized, DVC and reproducibility, with the details in [`docs/SETUP.md`](SETUP.md) (setup, platforms, running things by hand) and [`docs/PIPELINE.md`](PIPELINE.md) (schedules, validation checks, alerts) |
+| Reproducibility | a fixed Python version ([`.python-version`](../.python-version)), locked dependencies ([`uv.lock`](../uv.lock)), Docker for Airflow, [`.env.example`](../.env.example), the schema in git and DVC for the data |
+| Code style | small functions that each do one thing, one file per API, shared code in [`scripts/helpers/`](../scripts/helpers/) |
 | Error handling | retries with backoff for 429/5xx, one source or ticker failing doesn't stop the rest, a missing API key just skips that source, broken raw lines are skipped and counted, raw files are never overwritten, a broken alert never hides the real error, and Airflow retries failed tasks |
 
 ## What comes next: the model

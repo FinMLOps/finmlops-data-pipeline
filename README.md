@@ -35,11 +35,11 @@ flowchart LR
     P --> O[("data/processed/<br/>news.parquet")]
 ```
 
-**Ingest** (`scripts/ingest.py`) fetches news for every ticker from both APIs at the same time and saves the responses as-is, one JSONL file per source, under `data/raw/YYYY/MM/DD/`. Each run fetches a window that ended 6 hours earlier, because the APIs take a few hours to make new articles available (see [docs/PIPELINE.md](docs/PIPELINE.md#why-each-run-fetches-6-hours-late)). Files go in the folder of the day the fetch window starts, and we never overwrite raw files. If an API rate limits us or has a server error, the request is retried a few times, and if one source or ticker fails the rest still get saved.
+**Ingest** ([`scripts/ingest.py`](scripts/ingest.py)) fetches news for every ticker from both APIs at the same time and saves the responses as-is, one JSONL file per source, under `data/raw/YYYY/MM/DD/`. Each run fetches a window that ended 6 hours earlier, because the APIs take a few hours to make new articles available (see [docs/PIPELINE.md](docs/PIPELINE.md#why-each-run-fetches-6-hours-late)). Files go in the folder of the day the fetch window starts, and we never overwrite raw files. If an API rate limits us or has a server error, the request is retried a few times, and if one source or ticker fails the rest still get saved.
 
-**Validate** (`scripts/tfdv_validate.py`) checks one day of raw data against a saved schema using TFDV. It catches things like missing fields, tickers we don't track, weirdly long text, old or future-dated articles, and days where we got way fewer articles than usual. More details in [docs/PIPELINE.md](docs/PIPELINE.md#data-validation).
+**Validate** ([`scripts/tfdv_validate.py`](scripts/tfdv_validate.py)) checks one day of raw data against a saved schema using TFDV. It catches things like missing fields, tickers we don't track, weirdly long text, old or future-dated articles, and days where we got way fewer articles than usual. More details in [docs/PIPELINE.md](docs/PIPELINE.md#data-validation).
 
-**Preprocess** (`scripts/preprocess.py`) takes all the raw data and turns it into `data/processed/news.parquet`. It maps the two APIs' different formats to the same columns, strips HTML, converts timestamps to UTC, fixes ticker variants (`MSFT.MI` becomes `MSFT`, `GOOG` becomes `GOOGL`), drops non-English articles, and removes duplicate headlines (keeping the earliest one). Each row is one article for one ticker, so an article about both Apple and Nvidia shows up twice.
+**Preprocess** ([`scripts/preprocess.py`](scripts/preprocess.py)) takes all the raw data and turns it into `data/processed/news.parquet`. It maps the two APIs' different formats to the same columns, strips HTML, converts timestamps to UTC, fixes ticker variants (`MSFT.MI` becomes `MSFT`, `GOOG` becomes `GOOGL`), drops non-English articles, and removes duplicate headlines (keeping the earliest one). Each row is one article for one ticker, so an article about both Apple and Nvidia shows up twice.
 
 ## More docs
 
@@ -75,7 +75,7 @@ FINNHUB_API_KEY=your_finnhub_api_key
 The Gmail settings in there are optional, they're only for alert emails (see [SETUP.md](docs/SETUP.md#the-env-file)).
 
 > [!CAUTION]
-> `.env` holds your real keys. It's in `.gitignore`, so never force-add it or paste its contents anywhere.
+> `.env` holds your real keys. It's in [`.gitignore`](.gitignore), so never force-add it or paste its contents anywhere.
 
 **3. Start Airflow:**
 
@@ -94,7 +94,7 @@ The first build takes a few minutes (it installs TensorFlow), later ones are muc
 docker compose exec airflow-scheduler bash -c 'for d in ingest_finnhub ingest_marketaux process_news; do airflow dags unpause $d; done'
 ```
 
-The ingest DAGs start collecting into `data/raw/`, and `process_news` validates and cleans each day at 06:30 UTC the next morning. The schema is already in the repo (`data/schema/schema.pbtxt`), so there's nothing to set up for validation.
+The ingest DAGs start collecting into `data/raw/`, and `process_news` validates and cleans each day at 06:30 UTC the next morning. The schema is already in the repo ([`data/schema/schema.pbtxt`](data/schema/schema.pbtxt)), so there's nothing to set up for validation.
 
 > [!IMPORTANT]
 > Airflow only runs while your computer is on and awake, so keep it awake (and plugged in), especially around 06:00 to 06:30 UTC when each day gets finished and processed. See [keeping the computer awake](docs/SETUP.md#keeping-the-computer-awake).
@@ -106,7 +106,7 @@ make down
 ```
 
 > [!CAUTION]
-> `docker compose down -v` also deletes the Postgres volume, which wipes all of Airflow's run history. Your files in `data/` are safe either way.
+> `docker compose down -v` also deletes the Postgres volume, which wipes all of Airflow's run history. Your files in [`data/`](data/) are safe either way.
 
 > [!NOTE]
 > `make up` runs the containers as your own user, otherwise on Linux the files Airflow writes into the repo would end up owned by someone else. If you don't have `make`, use `AIRFLOW_UID=$(id -u) docker compose up -d --build` instead.
@@ -125,7 +125,7 @@ Each run fetches its own time window, so runs never overlap and there are no gap
 
 ## Data validation
 
-Every day is checked with TFDV against the schema in `data/schema/schema.pbtxt` (built from two weeks of real data) and compared with the same weekday a week earlier. It catches missing fields, tickers we don't track, outliers, old or future-dated articles, non-English articles, drift in the ticker mix, too few or too many articles, a missing source or ticker, and duplicate spikes. Each day's stats, anomalies and an HTML stats page go to `data/validation/YYYY/MM/DD/`. The full list of checks is in [docs/PIPELINE.md](docs/PIPELINE.md#data-validation).
+Every day is checked with TFDV against the schema in [`data/schema/schema.pbtxt`](data/schema/schema.pbtxt) (built from two weeks of real data) and compared with the same weekday a week earlier. It catches missing fields, tickers we don't track, outliers, old or future-dated articles, non-English articles, drift in the ticker mix, too few or too many articles, a missing source or ticker, and duplicate spikes. Each day's stats, anomalies and an HTML stats page go to `data/validation/YYYY/MM/DD/`. The full list of checks is in [docs/PIPELINE.md](docs/PIPELINE.md#data-validation).
 
 ## Alerts
 
@@ -133,7 +133,7 @@ When validation finds anomalies or any Airflow task fails after its retries, the
 
 ## Data versioning (DVC)
 
-We version `data/raw/` and `data/processed/news.parquet` with DVC. The `preprocess` step is a DVC stage in `dvc.yaml`, so `dvc.lock` records exactly which raw data and code produced each `news.parquet`. To record the current data as a new version:
+We version `data/raw/` and `data/processed/news.parquet` with DVC. The `preprocess` step is a DVC stage in [`dvc.yaml`](dvc.yaml), so [`dvc.lock`](dvc.lock) records exactly which raw data and code produced each `news.parquet`. To record the current data as a new version:
 ```bash
 make snapshot
 git push
