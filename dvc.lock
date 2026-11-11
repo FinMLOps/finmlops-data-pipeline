@@ -1,23 +1,23 @@
 schema: '2.0'
 stages:
   preprocess:
-    cmd: uv run python -m scripts.preprocess
+    cmd: python -m scripts.preprocess
     deps:
     - path: data/raw
       hash: md5
-      md5: 614a9af07e76ee925140ec661ae7522d.dir
-      size: 19592216
-      nfiles: 415
+      md5: ee1878b7abe68a290f56ab37432d1b76.dir
+      size: 21890385
+      nfiles: 476
     - path: scripts/config.py
       hash: md5
       md5: 912e4906e7e4bc08e18e940ead54feba
       size: 68
     - path: scripts/preprocess.py
       hash: md5
-      md5: e045955c2f9201e212956c9f1563adf5
-      size: 4952
+      md5: bc5fe294b1be070663b2184b8cb3a97a
+      size: 6165
     outs:
     - path: data/processed/news.parquet
       hash: md5
-      md5: 25bb48728036bf38c4d91e41ff64f804
-      size: 6302538
+      md5: 93feeb318319b86d47ab1cbb786ffc3c
+      size: 6834773
