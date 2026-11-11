@@ -39,7 +39,7 @@ flowchart LR
 
 **Validate** ([`scripts/tfdv_validate.py`](scripts/tfdv_validate.py)) checks one day of raw data against a saved schema using TFDV. It catches things like missing fields, tickers we don't track, weirdly long text, old or future-dated articles, and days where we got way fewer articles than usual. More details in [docs/PIPELINE.md](docs/PIPELINE.md#data-validation).
 
-**Preprocess** ([`scripts/preprocess.py`](scripts/preprocess.py)) takes all the raw data and turns it into `data/processed/news.parquet`. It maps the two APIs' different formats to the same columns, strips HTML, converts timestamps to UTC, fixes ticker variants (`MSFT.MI` becomes `MSFT`, `GOOG` becomes `GOOGL`), drops non-English articles, and removes duplicate headlines (keeping the earliest one). Each row is one article for one ticker, so an article about both Apple and Nvidia shows up twice.
+**Preprocess** ([`scripts/preprocess.py`](scripts/preprocess.py)) takes all the raw data and turns it into `data/processed/news.parquet`. It maps the two APIs' different formats to the same columns, strips HTML, converts timestamps to UTC, fixes ticker variants (`MSFT.MI` becomes `MSFT`, `GOOG` becomes `GOOGL`), drops non-English articles, and removes duplicate headlines (keeping the earliest one). Each row is one article for one ticker, so an article about both Apple and Nvidia shows up twice. Marketaux rows also keep Marketaux's sentiment score for that ticker (`sentiment_score`, -1 to 1), which the model repo turns into labels. It comes from the US listing (foreign copies like `MSFT.MI` are ignored so they can't outweigh it), and Alphabet's `GOOG` and `GOOGL` scores are averaged equally. Finnhub rows leave it empty.
 
 ## More docs
 

@@ -41,7 +41,7 @@ Most of the actual work in preprocessing is getting both APIs into the same form
 | Turn each API's fields into one common format | `finnhub_row()`, `marketaux_row()` and `make_row()`, picked through `MAPPERS` |
 | Strip tags, decode entities, collapse whitespace | `clean_text()` |
 | Standardize tickers (`MSFT.MI` → `MSFT`, `GOOG` → `GOOGL`) and drop the ones we don't track | `to_tickers()` |
-| Convert times to UTC, drop empty or non-English articles, make one row per article per ticker, remove duplicate headlines (keeping the earliest one), and build the `text` column (title + summary) for the model | `preprocess()` |
+| Convert times to UTC, drop empty or non-English articles, make one row per article per ticker, remove duplicate headlines (keeping the earliest one), build the `text` column (title + summary) for the model, and keep Marketaux's per-ticker `sentiment_score` for labels | `preprocess()` |
 | Save everything to `data/processed/news.parquet` | `run()` |
 
 If we ever add another API, we only need to write one new `*_row()` function and add it to `MAPPERS`.

@@ -26,11 +26,12 @@ COLUMNS = [
     "url",
     "symbols",
     "language",
+    "scores",  # {raw symbol: sentiment score}, Marketaux only
 ]
 ALIASES = {"GOOG": "GOOGL"}  # Alphabet's two share classes count as one company
 
 
-def make_row(source, publisher, title, summary, published, url, symbols, language="en"):
+def make_row(source, publisher, title, summary, published, url, symbols, language="en", scores=None):
     """Build one common row; the id is stable across runs (source + url)."""
     published = parse_dt(published)  # unix seconds or ISO string -> UTC datetime
     key = url or f"{title}|{published.isoformat()}"
@@ -44,6 +45,7 @@ def make_row(source, publisher, title, summary, published, url, symbols, languag
         url,
         symbols,
         language,
+        scores,
     ]
     return dict(zip(COLUMNS, values))
 
@@ -61,6 +63,7 @@ def finnhub_row(item):
 
 
 def marketaux_row(item):
+    entities = item.get("entities") or []
     return make_row(
         "marketaux",
         publisher=item.get("source"),  # e.g. "cnbc.com"
@@ -68,8 +71,9 @@ def marketaux_row(item):
         summary=item.get("description") or item.get("snippet"),
         published=item["published_at"],
         url=item.get("url"),
-        symbols=[e.get("symbol") for e in item.get("entities") or []],
+        symbols=[e.get("symbol") for e in entities],
         language=item.get("language", "en"),
+        scores={e.get("symbol"): e.get("sentiment_score") for e in entities},  # per company, -1 to 1
     )
 
 
@@ -113,6 +117,20 @@ def to_tickers(symbols):
     return sorted(out)
 
 
+def ticker_score(scores, ticker):
+    """Marketaux's score for one tracked ticker, taken from its US listings.
+
+    Marketaux tags the same company on several exchanges (MSFT, MSFT.MI, MSFT.MX) and copies
+    one score onto the foreign listings, so a plain average would weight a view by how many
+    exchanges were tagged. We use the US symbols (no exchange suffix) and average them equally,
+    which only matters for Alphabet's two share classes (GOOG and GOOGL). Foreign listings are
+    a fallback for when no US listing is tagged.
+    """
+    matches = {s: v for s, v in (scores or {}).items() if v is not None and to_tickers([s]) == [ticker]}
+    found = [v for s, v in matches.items() if "." not in s] or list(matches.values())
+    return sum(found) / len(found) if found else None
+
+
 def preprocess(rows):
     df = pd.DataFrame(rows, columns=COLUMNS)
     df["title"] = df["title"].map(clean_text)
@@ -123,6 +141,8 @@ def preprocess(rows):
     # one row per tracked ticker the article is about
     df["ticker"] = df["symbols"].map(to_tickers)
     df = df.explode("ticker").dropna(subset=["ticker"])
+    # each row keeps the score for its own ticker (empty for Finnhub, which has no scores)
+    df["sentiment_score"] = [ticker_score(s, t) for s, t in zip(df["scores"], df["ticker"])]
 
     # same headline for the same ticker (across sources or runs): keep the earliest
     df["headline_key"] = (
@@ -133,7 +153,7 @@ def preprocess(rows):
     df["text"] = df["title"].where(
         df["summary"] == "", df["title"] + "\n\n" + df["summary"]
     )
-    cols = ["id", "source", "publisher", "ticker", "title", "summary", "text", "published", "url"]
+    cols = ["id", "source", "publisher", "ticker", "title", "summary", "text", "published", "url", "sentiment_score"]
     return df[cols].reset_index(drop=True)
 
 

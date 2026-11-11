@@ -24,14 +24,15 @@ def finnhub_item(headline="Apple beats earnings", related="AAPL", datetime=TS, *
 
 
 # fake raw marketaux item, shaped like the real API output
-def marketaux_item(title="Nvidia rallies", symbols=("NVDA",), language="en"):
+def marketaux_item(title="Nvidia rallies", symbols=("NVDA",), language="en", scores=None):
+    scores = scores or {}
     return {
         "title": title,
         "published_at": "2026-10-24T15:00:00.000000Z",
         "description": "desc",
         "url": f"https://x.com/{title}",
         "language": language,
-        "entities": [{"symbol": s} for s in symbols],
+        "entities": [{"symbol": s, "sentiment_score": scores.get(s)} for s in symbols],
     }
 
 
@@ -66,6 +67,27 @@ def test_marketaux_row_maps_fields():
     assert row["summary"] == "desc"
     assert row["symbols"] == ["NVDA", "AVGO"]
     assert row["language"] == "es"
+
+
+# each ticker row keeps marketaux's score for that ticker, from its US listings; finnhub rows have none
+def test_sentiment_score_per_ticker():
+    rows = [
+        preprocess.marketaux_row(marketaux_item(
+            symbols=["NVDA", "MSFT", "MSFT.MI", "GOOG", "GOOGL", "GOOGL.MX", "GOOG.MX", "TSLA.MX", "AVGO"],
+            scores={"NVDA": 0.6, "MSFT": -0.2, "MSFT.MI": -0.4,
+                    "GOOG": 0.6, "GOOGL": 0.2, "GOOGL.MX": 0.2, "GOOG.MX": 0.2,
+                    "TSLA.MX": 0.5, "AVGO": 0.9},
+        )),
+        preprocess.finnhub_row(finnhub_item()),
+    ]
+    df = preprocess.preprocess(rows).set_index("ticker")["sentiment_score"]
+
+    assert df["NVDA"] == 0.6
+    assert df["MSFT"] == -0.2  # US listing wins, MSFT.MI ignored
+    assert df["GOOGL"] == pytest.approx(0.4)  # GOOG and GOOGL weighted equally, foreign copies ignored
+    assert df["TSLA"] == 0.5  # no US listing tagged: fall back to the foreign one
+    assert "AVGO" not in df  # untracked ticker dropped
+    assert pd.isna(df["AAPL"])  # finnhub row: no score
 
 
 # html leftovers and extra spaces should be cleaned out of the text
