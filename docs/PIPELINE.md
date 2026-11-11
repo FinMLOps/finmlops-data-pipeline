@@ -8,13 +8,30 @@ The [README](../README.md#how-it-works) has the overview. This page explains the
 |---|---|---|---|
 | `ingest_finnhub` | [`dags/ingest_news_dag.py`](../dags/ingest_news_dag.py) | every hour | fetches one hour of Finnhub news, 6 hours late (the 12:00 run fetches 05:00 to 06:00) |
 | `ingest_marketaux` | [`dags/ingest_news_dag.py`](../dags/ingest_news_dag.py) | every 6 hours (00, 06, 12, 18 UTC) | fetches one 6-hour window of Marketaux news, 6 hours late (the 12:00 run fetches 00:00 to 06:00) |
-| `process_news` | [`dags/process_news_dag.py`](../dags/process_news_dag.py) | daily at 06:30 UTC | validates the previous day with TFDV, then rebuilds `news.parquet` |
+| `process_news` | [`dags/process_news_dag.py`](../dags/process_news_dag.py) | daily at 06:30 UTC | validates the previous day with TFDV, rebuilds `news.parquet` through DVC, and (if turned on) publishes the snapshot to GCS and GitHub |
 
 - Each ingest run only fetches its own `[start, end)` time window, so runs never overlap and there are no gaps. An article published exactly at the end of a window belongs to the next one.
 - If the machine was off, `catchup` runs the missed windows when Airflow comes back.
 - Failed ingest tasks retry twice (5 minutes apart).
 - In `process_news`, preprocessing only runs if validation passes, so bad data never reaches `news.parquet`. Validation doesn't retry, since anomalies won't go away on a retry.
 - If a task still fails after its retries, you get an email (if alerts are set up).
+
+### Automated snapshots
+
+`process_news` has three steps: `tfdv_validate` → `preprocess` → `publish_snapshot`.
+
+- `preprocess` runs `dvc add data/raw && dvc repro`, so every rebuilt `news.parquet` is recorded in [`dvc.lock`](../dvc.lock) together with the exact raw data and code that made it.
+- `publish_snapshot` does what `make snapshot` + `git push` do by hand: `dvc push` to the GCS bucket, then commits `data/raw.dvc` and `dvc.lock` to `main` and pushes them. After that the model repo gets the new data with `uv run dvc update data/news.parquet.dvc`.
+- It skips (and doesn't fail) when `AUTO_SNAPSHOT` isn't `true`, when the repo isn't on `main`, or when the data didn't change.
+
+> [!IMPORTANT]
+> It's off by default because it needs credentials inside the Airflow containers. To turn it on:
+> 1. Create a GCS service account with **Storage Object Admin on the `finmlops-pipeline-dvc` bucket only**, download its JSON key to `secrets/dvc-service-account.json` (the folder is git-ignored, never commit it), and set `GOOGLE_APPLICATION_CREDENTIALS=/opt/airflow/project/secrets/dvc-service-account.json` in `.env`.
+> 2. Create a fine-grained GitHub token for **this repo only** with **Contents: Read and write**, and set `GITHUB_TOKEN` in `.env`. Commits show up as `finmlops-bot` (the `GIT_*` lines in [`.env.example`](../.env.example)).
+> 3. Set `AUTO_SNAPSHOT=true` and restart with `docker compose up -d`.
+
+> [!WARNING]
+> The containers work in the same folder you develop in (the repo is mounted into them). `publish_snapshot` only commits the two pointer files and only on `main`, but if you're on `main` with your own uncommitted work, `git pull --rebase --autostash` will stash and restore it around the pull. For a shared deployment, run Airflow from its own clone of the repo.
 
 > [!NOTE]
 > Because ingest runs 6 hours late, the last windows of a day (Finnhub 23:00 to 24:00, Marketaux 18:00 to 24:00) are only fetched at 06:00 the next morning. `process_news` runs at 06:30 so those are in, and it always validates a full day. Validating a partial day would trip the "too few articles" check.

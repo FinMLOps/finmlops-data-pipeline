@@ -1,6 +1,7 @@
 *.pdf
 __pycache__/
 .env
+secrets/
 !.env.example
 data/raw/
 data/validation/

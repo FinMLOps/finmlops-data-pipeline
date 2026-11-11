@@ -10,6 +10,26 @@ from airflow.timetables.interval import CronDataIntervalTimetable
 from scripts.alert_utils import airflow_failure_callback
 
 RUN = 'cd "$PROJECT_DIR" && "$PIPELINE_PYTHON" -m '
+# dvc and the pipeline's python both live in /opt/venv (the image has no uv or make)
+DVC = 'cd "$PROJECT_DIR" && export PATH=/opt/venv/bin:$PATH && '
+
+# Upload the new snapshot to GCS and push the pointer files to GitHub, so the model repo
+# can pick it up with `dvc update`. Off unless AUTO_SNAPSHOT=true, because it needs a GCS
+# service account and a GitHub token in .env (see docs/PIPELINE.md#automated-snapshots).
+# Only runs on main, so it never commits into someone's feature branch.
+PUBLISH = """
+set -e
+cd "$PROJECT_DIR"
+export PATH=/opt/venv/bin:$PATH
+if [ "$AUTO_SNAPSHOT" != "true" ]; then echo "AUTO_SNAPSHOT is off, skipping"; exit 0; fi
+if [ "$(git rev-parse --abbrev-ref HEAD)" != "main" ]; then echo "not on main, skipping"; exit 0; fi
+if git diff --quiet -- data/raw.dvc dvc.lock; then echo "data unchanged, nothing to publish"; exit 0; fi
+ORIGIN="https://x-access-token:${GITHUB_TOKEN}@github.com/FinMLOps/finmlops-data-pipeline.git"
+dvc push
+git commit -m "Data snapshot {{ data_interval_start.strftime('%Y-%m-%d') }} (automated)" -- data/raw.dvc dvc.lock
+git pull --rebase --autostash "$ORIGIN" main
+git push "$ORIGIN" HEAD:main
+"""
 
 with DAG(
     dag_id="process_news",
@@ -35,7 +55,14 @@ with DAG(
     )
     preprocess = BashOperator(
         task_id="preprocess",
-        bash_command=RUN + "scripts.preprocess",
+        # record the raw data we're building from, then rebuild news.parquet through DVC,
+        # so dvc.lock says exactly which raw data and code produced it
+        bash_command=DVC + "dvc add data/raw && dvc repro",
+    )
+    publish = BashOperator(
+        task_id="publish_snapshot",
+        bash_command=PUBLISH,
     )
 
-    validate >> preprocess  # only clean the data if it passed validation
+    # only clean the data if it passed validation, and only publish what was cleaned
+    validate >> preprocess >> publish

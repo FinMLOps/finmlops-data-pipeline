@@ -26,13 +26,14 @@ flowchart LR
     M([Marketaux API]) -- "ingest_marketaux<br/>every 6 hours, 6 h late" --> R
 
     subgraph process_news ["process_news (daily, 06:30 UTC)"]
-        V{tfdv_validate} -- passes --> P[preprocess]
+        V{tfdv_validate} -- passes --> P[preprocess] --> PS[publish_snapshot]
     end
 
     R --> V
     S[("data/schema/<br/>schema.pbtxt")] -. checked against .-> V
     V -- anomalies --> A[/email alert/]
     P --> O[("data/processed/<br/>news.parquet")]
+    PS -. "dvc push + git push<br/>(if AUTO_SNAPSHOT=true)" .-> G[("GCS bucket +<br/>GitHub main")]
 ```
 
 **Ingest** ([`scripts/ingest.py`](scripts/ingest.py)) fetches news for every ticker from both APIs at the same time and saves the responses as-is, one JSONL file per source, under `data/raw/YYYY/MM/DD/`. Each run fetches a window that ended 6 hours earlier, because the APIs take a few hours to make new articles available (see [docs/PIPELINE.md](docs/PIPELINE.md#why-each-run-fetches-6-hours-late)). Files go in the folder of the day the fetch window starts, and we never overwrite raw files. If an API rate limits us or has a server error, the request is retried a few times, and if one source or ticker fails the rest still get saved.
@@ -119,7 +120,7 @@ More commands (triggering a DAG, running one day by hand, running the scripts wi
 |---|---|---|
 | `ingest_finnhub` | every hour | fetches one hour of Finnhub news, 6 hours late |
 | `ingest_marketaux` | every 6 hours | fetches one 6-hour window of Marketaux news, 6 hours late |
-| `process_news` | daily at 06:30 | validates the previous day with TFDV, then rebuilds `news.parquet` |
+| `process_news` | daily at 06:30 | validates the previous day with TFDV, rebuilds `news.parquet` through DVC, and (if turned on) publishes the new snapshot |
 
 Each run fetches its own time window, so runs never overlap and there are no gaps, and missed windows are caught up when Airflow comes back. Preprocessing only runs if validation passes. The schedule maths, the retries and why each run is 6 hours late are in [docs/PIPELINE.md](docs/PIPELINE.md#the-dags).
 

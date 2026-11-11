@@ -13,7 +13,7 @@ We use [DVC](https://dvc.org) to version our data. Git keeps small pointer files
 | `.dvc/config.local` | your own settings, like where your local remote lives (not committed) |
 
 > [!NOTE]
-> Airflow collects, validates and processes the data on its own schedule. DVC snapshots are something we take on purpose (with `make snapshot`), for example once a week or before we use the data for a report. In a production setup a separate deployment with a bot account could automate this.
+> Airflow collects, validates and processes the data on its own schedule, and every daily rebuild goes through `dvc repro`. Publishing a snapshot (pushing it to GCS and the pointers to GitHub) happens either by hand with `make snapshot` + `git push`, or automatically each day by the `publish_snapshot` task once its credentials are set up (see [docs/PIPELINE.md](PIPELINE.md#automated-snapshots)).
 
 ## Everyday commands
 
